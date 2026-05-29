@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 import logging
+from sklearn.metrics import average_precision_score
 
 logger = logging.getLogger(__name__)
 
@@ -106,22 +107,40 @@ def multilabel_metrics(
     threshold: float = 0.5,
     eps: float = 1e-6,
 ):
+    """Compute per-class precision, recall, F1, IoU and Average Precision.
+
+    Expects the FULL validation set (not per-batch) so that AP is computed
+    over all pixels at once.  Average Precision is threshold-free and is
+    the preferred metric when comparing models with different loss functions
+    (e.g. BCEDice vs FocalDice) whose output probabilities live on different
+    scales.
+    """
     from ..data.preprocessing import CLASS_NAMES
 
-    probs = torch.sigmoid(logits)
+    probs = torch.sigmoid(logits)           # (N, C, H, W)
     preds = (probs > threshold).float()
+
     per_class = []
     for i, name in enumerate(CLASS_NAMES):
-        p = preds[:, i]
-        t = targets[:, i]
-        tp = (p * t).sum().item()
-        fp = (p * (1 - t)).sum().item()
-        fn = ((1 - p) * t).sum().item()
+        # Flatten spatial dims → (N*H*W,)
+        p      = preds[:, i].reshape(-1).cpu().numpy()
+        t      = targets[:, i].reshape(-1).cpu().numpy()
+        prob_i = probs[:, i].reshape(-1).cpu().numpy()
+
+        tp = float((p * t).sum())
+        fp = float((p * (1 - t)).sum())
+        fn = float(((1 - p) * t).sum())
         precision = tp / (tp + fp + eps)
-        recall = tp / (tp + fn + eps)
-        f1 = 2 * precision * recall / (precision + recall + eps)
-        iou = tp / (tp + fp + fn + eps)
-        per_class.append({'class': name, 'precision': precision, 'recall': recall, 'f1': f1, 'iou': iou})
+        recall    = tp / (tp + fn + eps)
+        f1        = 2 * precision * recall / (precision + recall + eps)
+        iou       = tp / (tp + fp + fn + eps)
+        # AP requires at least one positive pixel; zero otherwise
+        ap = float(average_precision_score(t, prob_i)) if t.sum() > 0 else 0.0
+
+        per_class.append({
+            'class': name, 'precision': precision, 'recall': recall,
+            'f1': f1, 'iou': iou, 'ap': ap,
+        })
     return pd.DataFrame(per_class)
 
 
@@ -177,19 +196,20 @@ class Trainer:
     def current_lr(self) -> float:
         return self.optimizer.param_groups[0]['lr']
 
-    def evaluate(self, loader, criterion=None):
+    def evaluate(self, loader, criterion=None):  # criterion kept for backward compat
         self.model.eval()
-        metrics_list = []
-        criterion = criterion or self.criterion
+        all_logits, all_targets = [], []
         with torch.no_grad():
             for x, y in loader:
                 x = x.to(self.device)
                 y = y.to(self.device)
-                logits = self.model(x)
-                if criterion:
-                    metrics_list.append(multilabel_metrics(logits, y))
+                all_logits.append(self.model(x).cpu())
+                all_targets.append(y.cpu())
 
-        if not metrics_list:
+        if not all_logits:
             return None
 
-        return pd.concat(metrics_list).groupby('class').mean()
+        return multilabel_metrics(
+            torch.cat(all_logits),
+            torch.cat(all_targets),
+        )
