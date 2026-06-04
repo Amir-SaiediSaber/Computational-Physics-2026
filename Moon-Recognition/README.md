@@ -5,7 +5,7 @@ Computational Physics 2026. The project compares four different ways of segmenti
 lunar features on Marius Hills tiles, one branch per student:
 
 - Student 1 — thresholding + morphology (classical baseline)
-- Student 2 — contour detection + watershed
+- Student 2 — Yolo architecture
 - Student 3 — U-Net (semantic segmentation)
 - **Student 4 — Mask R-CNN (instance segmentation, this branch)**
 
