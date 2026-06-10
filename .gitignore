@@ -9,7 +9,9 @@ __pycache__/
 node_modules/
 memory/
 CLAUDE.md
-data/
+# Root-level data directory only (anchored): an unanchored "data/" would also
+# ignore source code in lunar_segmentation/lunar_segmentation/data/
+/data/
 */notebooks/catboost_info
 
 # LaTeX build artifacts
