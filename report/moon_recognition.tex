@@ -10,6 +10,7 @@
 %   \usepackage{booktabs}
 %   \usepackage{subcaption}
 %   \usepackage{amsmath}
+%   \usepackage{amssymb}   % \checkmark in the south-pole table
 %   \usepackage{hyperref}
 %   \graphicspath{{report/}}   % or adjust to where this file lives
 % =============================================================================
@@ -44,7 +45,7 @@ Because multiple classes can coexist in a single pixel (e.g.\ a pit on the rim o
 Training data consists of Wide Angle Camera (WAC) grayscale tiles downloaded from the LROC archive, covering the \textit{Marius Hills} volcanic region on the Oceanus Procellarum — a site of particular scientific interest due to its high density of pit skylights, wrinkle ridges, and rilles.
 
 \paragraph{Tiling.}
-The raw raster is divided into non-overlapping training patches using a sliding-window tiler:
+The raw raster is divided into overlapping training patches using a sliding-window tiler:
 \begin{itemize}
     \item Tile size: $256 \times 256$ pixels,
     \item Stride: $128$ pixels (50\% overlap between adjacent tiles),
@@ -53,7 +54,7 @@ The raw raster is divided into non-overlapping training patches using a sliding-
 \end{itemize}
 
 \paragraph{Labels.}
-Ground-truth annotations are sourced from the LROC feature catalogue (shapefiles and CSV), rasterised onto the tile grid as binary masks. To account for the point-like or line-like nature of some classes, morphological dilation is applied per class before rasterisation:
+Ground-truth annotations are sourced from the LROC feature catalogue (shapefiles and CSV), rasterised onto the tile grid as binary masks. To account for the point-like or line-like nature of some classes, morphological dilation is applied per class after rasterisation:
 \begin{itemize}
     \item \texttt{pit\_skylight}, \texttt{apollo\_site}, \texttt{irregular\_mare\_patch}: disk kernel of radius 5,
     \item \texttt{wrinkle\_ridge}, \texttt{lobate\_scarp}: disk kernel of radius 3 (linear features),
@@ -62,8 +63,11 @@ Ground-truth annotations are sourced from the LROC feature catalogue (shapefiles
 \end{itemize}
 
 \paragraph{Train / validation split.}
-Tiles are split 80/20 by sequential index, yielding 12{,}745 training tiles and 3{,}186 validation tiles.
+Tiles are split 80/20 by random permutation with a fixed seed (42), yielding 12{,}745 training tiles and 3{,}186 validation tiles; the same split is reused across all configurations so that comparisons between models are paired.
 Label imbalance is significant: \texttt{impact\_crater} dominates, while \texttt{pit\_skylight} and \texttt{candidate\_rille} are rare, covering less than 1\% of pixels each.
+
+\paragraph{Limitation: spatial overlap between splits.}
+Because adjacent tiles overlap by 50\%, a random tile-level split leaks pixels between the two sets: we measured that \emph{every} validation tile overlaps at least one training tile. Absolute validation scores are therefore optimistic (they partially reward memorisation of seen pixels), although \emph{relative} comparisons between configurations trained and evaluated on the identical split remain informative. A leakage-free \emph{spatial block split} (contiguous $1024$-px blocks assigned to validation, with overlapping boundary tiles discarded from training) has been implemented in \texttt{data/splits.py}; its impact is discussed where relevant, in particular for the augmentation study (Sec.~\ref{sec:mr_augmentation}).
 
 % -----------------------------------------------------------------------------
 \subsection{Input Pre-processing Pipeline}
@@ -73,7 +77,7 @@ Each grayscale tile is converted into a three-channel tensor to provide the netw
 
 \begin{enumerate}
     \item \textbf{Normalised intensity}: min-max normalisation of the raw pixel values to $[0,1]$.
-    \item \textbf{CLAHE}: Contrast Limited Adaptive Histogram Equalization (clip limit $2.0$, grid size $8 \times 8$) to enhance local contrast and make faint features more visible.
+    \item \textbf{CLAHE}: Contrast Limited Adaptive Histogram Equalization (\texttt{skimage.exposure.equalize\_adapthist}, clip limit $0.03$, default kernel of $1/8$ of the image side) to enhance local contrast and make faint features more visible.
     \item \textbf{Sobel edges}: magnitude of the Sobel gradient computed on the normalised tile, highlighting boundaries and ridge-like structures.
 \end{enumerate}
 
@@ -171,7 +175,7 @@ All definitive experiments were run on a \textbf{NVIDIA Tesla T4} (16 GB VRAM) v
     \item Batch size: 16 (T4) / 8 (MPS),
     \item Optimizer: Adam,
     \item Learning rate schedule: cosine annealing, $\eta_{\max}=10^{-3}$, $\eta_{\min}=10^{-5}$, $T_{\max}=30$,
-    \item Gradient clipping: max norm 1.0,
+    \item No gradient clipping (the trainer supports it, but it was disabled in all runs: \texttt{clip\_grad\_norm\_} forces a CPU synchronisation per batch on MPS),
     \item Checkpoints saved at end of training for each experimental configuration.
 \end{itemize}
 
@@ -322,7 +326,11 @@ Config & Final loss & Mean F1 & Mean IoU & Mean AP & Crater AP & Ridge AP \\
 \paragraph{Key findings.}
 This is the most striking result of the ablation campaign. Training without augmentation produces a model that is dramatically better on every metric: mean F1 improves by 0.086 (40\% relative), mean AP improves by 0.062 (31\% relative), and ridge AP improves from 0.457 to 0.558 (22\% relative).
 
-This counter-intuitive result is explained by the geography of the training data. The Marius Hills region has a strong directional bias: wrinkle ridges run predominantly in a narrow range of orientations dictated by the regional stress field, and rilles follow the same orientation. Applying rotations and reflections to these tiles presents the model with orientations of these features that are physically absent in the training region — effectively injecting false diversity and confusing the direction-sensitive representations the model needs. The result is consistent with findings in remote sensing segmentation~\cite{chen2018augmentation} where domain-specific spatial priors can outweigh the benefits of generic augmentation. Impact craters, being rotationally symmetric, are unaffected by augmentation, which explains why crater AP is nearly identical in both conditions (0.947 vs 0.942).
+Two effects plausibly combine to produce this result, and the present experiment cannot fully separate them.
+
+First, a \emph{geological} effect: the Marius Hills region has a strong directional bias — wrinkle ridges run predominantly in a narrow range of orientations dictated by the regional stress field, and rilles follow the same orientation. Applying rotations and reflections presents the model with feature orientations that are physically absent in the training region, injecting false diversity. Generic augmentation implicitly assumes that the transformed inputs remain representative of the target distribution~\cite{shorten2019augmentation}, an assumption violated here. Impact craters, being rotationally symmetric, are unaffected, which explains why crater AP is nearly identical in both conditions (0.947 vs 0.942).
+
+Second, a \emph{methodological} confound: as noted in Sec.~\ref{sec:mr_dataset}, the random tile split leaks overlapping pixels into validation. A model trained without augmentation is freer to memorise tile appearance and is rewarded for it on a leaky split, while augmentation suppresses exactly this memorisation. Part of the measured gap may therefore be an artefact of the split rather than a property of the data. Re-running this comparison with the leakage-free spatial block split (\texttt{data/splits.py}) is required before the ``augmentation is harmful'' conclusion can be considered definitive; this is left as the first item of future work.
 
 % -----------------------------------------------------------------------------
 \subsection{South Pole Inference}
@@ -373,7 +381,7 @@ Class & Avg.\ Max.\ Prob. & Global Max & Status \\
 \begin{figure}[h]
 \centering
 \includegraphics[width=\textwidth, height=0.82\textheight, keepaspectratio]{figures/MR/diagnostics_best_tiles.png}
-\caption{Best-detected tile per class on the south pole imagery. Each panel shows the LRO WAC tile overlaid with the predicted probability map for the class with the highest maximum confidence in that tile. Impact craters stand out clearly; other classes show localised but low-confidence activations.}
+\caption{Best-detected tile per class on the south pole imagery. Each panel shows the LRO WAC tile overlaid with the predicted probability map for the class with the highest maximum confidence in that tile. Note that overlays use a \emph{relative} threshold (top fraction of each tile's probabilities) so that the most likely candidate pixels are visible even when absolute confidence is low; coloured regions for the weak classes are therefore candidate locations, not confident detections. Impact craters stand out clearly; other classes show localised but low-confidence activations.}
 \label{fig:south_pole_best}
 \end{figure}
 
@@ -410,7 +418,7 @@ The principal conclusions of this study are:
 
     \item \textbf{Network width exhibits strong diminishing returns.} The small model ($w=16$, 505K parameters) achieves a mean AP within 0.001 of the wide model ($w=64$, 8M parameters) at one-sixth the training time and ${\sim}16\times$ fewer parameters. For resource-constrained inference the small model is recommended.
 
-    \item \textbf{Geometric augmentation is harmful on this dataset.} Training without flips and rotations outperforms the augmented model by 40\% on mean F1 and 31\% on mean AP. The Marius Hills training region has a directionally biased distribution of linear features; augmentation breaks this spatial prior and misleads the model. This result underlines that augmentation strategies must be tailored to the structural properties of the target domain.
+    \item \textbf{Geometric augmentation is harmful on this dataset — pending leakage-free confirmation.} Training without flips and rotations outperforms the augmented model by 40\% on mean F1 and 31\% on mean AP. The Marius Hills training region has a directionally biased distribution of linear features, and augmentation breaks this spatial prior; however, the random tile split leaks overlapping pixels into validation and rewards the memorisation that augmentation suppresses, so part of the gap may be a split artefact. The comparison must be repeated with the spatial block split before this conclusion is final. Either way, augmentation strategies must be tailored to the structural properties of the target domain.
 
     \item \textbf{Impact craters are the most reliably detected class.} Their circular symmetry and high training frequency make them robust across both the validation set (AP $\approx 0.95$) and the out-of-distribution south pole inference region (avg.\ max probability 0.863).
 
@@ -430,9 +438,12 @@ The principal conclusions of this study are:
 %   booktitle={ICCV},
 %   year={2017}
 % }
-% @article{chen2018augmentation,
-%   title={Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation},
-%   author={Chen, Liang-Chieh and Zhu, Yukun and Papandreou, George and Schroff, Florian and Adam, Hartwig},
-%   journal={ECCV},
-%   year={2018}
+% @article{shorten2019augmentation,
+%   title={A survey on Image Data Augmentation for Deep Learning},
+%   author={Shorten, Connor and Khoshgoftaar, Taghi M.},
+%   journal={Journal of Big Data},
+%   volume={6},
+%   number={1},
+%   pages={60},
+%   year={2019}
 % }
