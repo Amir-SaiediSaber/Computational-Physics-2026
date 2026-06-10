@@ -23,17 +23,32 @@ class Predictor:
             if isinstance(weights, dict) and 'model' in weights:
                 weights = weights['model']
             flat = {k.replace('model.', '', 1): v for k, v in weights.items()}
-            self.model.load_state_dict(flat, strict=False)
+            # strict=False tolerates legacy checkpoints (e.g. saved without the
+            # residual projection layers), but a silent mismatch would mean
+            # predicting with randomly initialised layers — so surface it loudly.
+            result = self.model.load_state_dict(flat, strict=False)
+            if result.missing_keys or result.unexpected_keys:
+                logger.warning(
+                    f"Checkpoint/architecture mismatch loading {weights_path}: "
+                    f"missing={result.missing_keys} unexpected={result.unexpected_keys}. "
+                    "Check use_residual / base_width match the checkpoint."
+                )
             logger.info(f"Loaded weights from {weights_path}")
 
     def predict(
         self,
         image_chw: np.ndarray,
-        tile_size: int = 128,
-        stride: int = 64,
+        tile_size: int = 256,
+        stride: int = 128,
         batch_size: int = 64,
     ) -> np.ndarray:
         """Sliding-window inference over a single large tile.
+
+        Window defaults (256/128) match the training tile size and stride, so
+        the model sees the same spatial context at inference as it did during
+        training.  NOTE: the south-pole results in the report were generated
+        with the previous defaults (128/64); pass those explicitly to reproduce
+        them exactly.
 
         Instead of calling the model once per window (the original approach),
         windows are batched together and sent to the GPU/MPS in groups of
