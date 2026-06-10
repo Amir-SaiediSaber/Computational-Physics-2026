@@ -64,7 +64,28 @@ Ground-truth annotations are sourced from the LROC feature catalogue (shapefiles
 
 \paragraph{Train / validation split.}
 Tiles are split 80/20 by random permutation with a fixed seed (42), yielding 12{,}745 training tiles and 3{,}186 validation tiles; the same split is reused across all configurations so that comparisons between models are paired.
-Label imbalance is significant: \texttt{impact\_crater} dominates, while \texttt{pit\_skylight} and \texttt{candidate\_rille} are rare, covering less than 1\% of pixels each.
+
+\paragraph{Label prevalence and channel saturation.}
+Table~\ref{tab:prevalence} reports the exact fraction of positive pixels per class, computed over all 15{,}931 tiles. The imbalance is extreme \emph{in both directions}: the \texttt{impact\_crater} channel covers 82.1\% of all pixels — half of the tiles are \emph{entirely} positive — while the five rarest classes have prevalences below $1.4\times10^{-4}$. The crater channel therefore behaves closer to a coverage-like layer than to a sparse target feature, a possibility explicitly flagged in the course material (``do not assume every positive pixel is a target feature without inspecting channels''). This has a direct consequence for interpretation: the Average Precision of an uninformative predictor equals the class prevalence, so per-class AP values must be read against the baselines in Table~\ref{tab:prevalence} rather than against zero.
+
+\begin{table}[h]
+\centering
+\caption{Per-class positive-pixel prevalence over the full dataset (15{,}931 tiles, $1.04\times10^9$ pixels per channel). The prevalence is also the AP of an uninformative (chance-level) predictor for that class.}
+\label{tab:prevalence}
+\begin{tabular}{lrr}
+\toprule
+Class & Prevalence & Tiles fully covered \\
+\midrule
+\texttt{impact\_crater}        & $8.21\times10^{-1}$ & 50.7\% \\
+\texttt{wrinkle\_ridge}        & $6.38\times10^{-3}$ & 0 \\
+\texttt{lobate\_scarp}         & $1.34\times10^{-4}$ & 0 \\
+\texttt{pit\_skylight}         & $4.2\times10^{-5}$  & 0 \\
+\texttt{irregular\_mare\_patch} & $2.0\times10^{-5}$  & 0 \\
+\texttt{apollo\_site}          & $1.5\times10^{-5}$  & 0 \\
+\texttt{candidate\_rille}      & $1.0\times10^{-5}$  & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \paragraph{Limitation: spatial overlap between splits.}
 Because adjacent tiles overlap by 50\%, a random tile-level split leaks pixels between the two sets: we measured that \emph{every} validation tile overlaps at least one training tile. Absolute validation scores are therefore optimistic (they partially reward memorisation of seen pixels), although \emph{relative} comparisons between configurations trained and evaluated on the identical split remain informative. A leakage-free \emph{spatial block split} (contiguous $1024$-px blocks assigned to validation, with overlapping boundary tiles discarded from training) has been implemented in \texttt{data/splits.py}; its impact is discussed where relevant, in particular for the augmentation study (Sec.~\ref{sec:mr_augmentation}).
@@ -237,7 +258,7 @@ FocalDice  & 1{,}927{,}207 & 214 & 3.893 & 0.1994 & 0.1632 & 0.1945 & 0.417 \\
 \end{figure}
 
 \paragraph{Key findings.}
-Residual shortcuts consistently improve over the plain DoubleConv baseline on aggregate F1, IoU, and AP (+residual vs FocalDice: $+0.0071$ mean F1, $+0.0050$ mean AP). Dropout alone does not help — it degrades both mean AP and ridge AP relative to plain FocalDice, likely because sparse labels already act as a strong regulariser. The combination \textbf{+both} achieves the best mean F1 (0.2076), best mean IoU (0.1688), and best mean AP (0.2004), as well as the highest ridge AP (0.453). Impact-crater AP is uniformly high (0.939–0.951) across all configurations, indicating that the architecture choice matters primarily for rare and structurally subtle classes.
+Residual shortcuts consistently improve over the plain DoubleConv baseline on aggregate F1, IoU, and AP (+residual vs FocalDice: $+0.0071$ mean F1, $+0.0050$ mean AP). Dropout alone does not help — it degrades both mean AP and ridge AP relative to plain FocalDice, likely because sparse labels already act as a strong regulariser. The combination \textbf{+both} achieves the best mean F1 (0.2076), best mean IoU (0.1688), and best mean AP (0.2004), as well as the highest ridge AP (0.453). Impact-crater AP is uniformly high (0.939–0.951) across all configurations, but given the 0.821 prevalence baseline (Table~\ref{tab:prevalence}) this represents only a modest lift over chance; the architecture choice matters primarily for rare and structurally subtle classes such as ridges, where AP~0.44--0.45 is ${\sim}70\times$ the 0.0064 chance level.
 
 % -----------------------------------------------------------------------------
 \subsection{Study 2 — Network Width}
@@ -328,9 +349,31 @@ This is the most striking result of the ablation campaign. Training without augm
 
 Two effects plausibly combine to produce this result, and the present experiment cannot fully separate them.
 
-First, a \emph{geological} effect: the Marius Hills region has a strong directional bias — wrinkle ridges run predominantly in a narrow range of orientations dictated by the regional stress field, and rilles follow the same orientation. Applying rotations and reflections presents the model with feature orientations that are physically absent in the training region, injecting false diversity. Generic augmentation implicitly assumes that the transformed inputs remain representative of the target distribution~\cite{shorten2019augmentation}, an assumption violated here. Impact craters, being rotationally symmetric, are unaffected, which explains why crater AP is nearly identical in both conditions (0.947 vs 0.942).
+First, a \emph{geological} effect: the Marius Hills region has a strong directional bias — wrinkle ridges run predominantly in a narrow range of orientations dictated by the regional stress field, and rilles follow the same orientation. Moreover, the Sun azimuth is consistent within the WAC mosaic, so flips and $90°$ rotations also produce illumination directions that never occur in the data. Applying such transforms presents the model with feature orientations and shading that are physically absent in the training region, injecting false diversity. Generic augmentation implicitly assumes that the transformed inputs remain representative of the target distribution~\cite{shorten2019augmentation}, an assumption violated here — the course material itself cautions against ``arbitrary rotations if illumination direction carries physical meaning''~\cite{zingales2026lecture}. Impact craters, being rotationally symmetric, are unaffected, which explains why crater AP is nearly identical in both conditions (0.947 vs 0.942).
 
 Second, a \emph{methodological} confound: as noted in Sec.~\ref{sec:mr_dataset}, the random tile split leaks overlapping pixels into validation. A model trained without augmentation is freer to memorise tile appearance and is rewarded for it on a leaky split, while augmentation suppresses exactly this memorisation. Part of the measured gap may therefore be an artefact of the split rather than a property of the data. Re-running this comparison with the leakage-free spatial block split (\texttt{data/splits.py}) is required before the ``augmentation is harmful'' conclusion can be considered definitive; this is left as the first item of future work.
+
+% -----------------------------------------------------------------------------
+\subsection{Qualitative Evaluation}
+\label{sec:mr_qualitative}
+
+Segmentation metrics alone do not reveal \emph{how} a model fails, so we complement the ablations with a visual comparison on identical validation tiles: raw image, ground truth, predicted probability, and a true-positive/false-positive/false-negative decomposition at threshold $0.5$, for the BCEDice baseline and the definitive model side by side (generated by \texttt{scripts/qualitative\_eval.py}; tiles are the three validation tiles with the largest \texttt{wrinkle\_ridge} ground-truth area).
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/MR/qualitative_wrinkle_ridge.png}
+\caption{Wrinkle-ridge qualitative comparison on three validation tiles (TP green, FP red, FN blue). Both models recover the topology of the ridge network; the definitive model (+both, no augmentation) produces visibly more complete coverage and fewer false positives than the BCEDice baseline. Errors concentrate on thin, low-contrast ridge segments, consistent with the localisation difficulty of linear features.}
+\label{fig:qualitative_ridge}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/MR/qualitative_impact_crater.png}
+\caption{Impact-crater qualitative comparison on the same tiles. The ground truth covers the \emph{entire} tile (cf.\ the 82\% prevalence and 50.7\% fully-covered tiles of Table~\ref{tab:prevalence}), so a prediction of ``everywhere'' is trivially correct: this figure is direct visual evidence that the crater channel behaves as a near-coverage layer and that crater AP must be read against its 0.821 chance baseline.}
+\label{fig:qualitative_crater}
+\end{figure}
+
+The ridge comparison shows that the metric gains of the definitive model correspond to a real, visible improvement in completeness of the recovered ridge network. The crater comparison, conversely, makes the saturation argument of Sec.~\ref{sec:mr_dataset} concrete.
 
 % -----------------------------------------------------------------------------
 \subsection{South Pole Inference}
@@ -386,7 +429,7 @@ Class & Avg.\ Max.\ Prob. & Global Max & Status \\
 \end{figure}
 
 \paragraph{Analysis.}
-The model confidently detects impact craters across the entire south pole (average max probability 0.863), consistent with its high crater AP of 0.947 on the Marius Hills validation set. Two classes — \texttt{wrinkle\_ridge} and \texttt{candidate\_rille} — show an interesting pattern: very low average-tile probabilities (0.001 and 0.006) but anomalously high global maxima (1.000 and 0.480). This indicates that the model makes rare but high-confidence predictions on a small number of tiles, rather than diffuse low-confidence activations everywhere.
+The model assigns high crater probability across the entire south pole (average max probability 0.863). Given the near-saturated crater layer learned in training (Sec.~\ref{sec:mr_dataset}), this is expected behaviour — the model has learned that almost everywhere is ``crater'' — and should not be over-interpreted as precise crater delineation. Two classes — \texttt{wrinkle\_ridge} and \texttt{candidate\_rille} — show an interesting pattern: very low average-tile probabilities (0.001 and 0.006) but anomalously high global maxima (1.000 and 0.480). This indicates that the model makes rare but high-confidence predictions on a small number of tiles, rather than diffuse low-confidence activations everywhere.
 
 The weak performance on rare classes at the south pole is attributable to two combined factors. First, the south pole is geologically distinct from Marius Hills: it lacks the volcanic structures (skylights, rilles, ridges) that dominate the training distribution, making it an out-of-distribution region for those classes. Second, the extremely low frequency of those classes in the training data means the model has seen very few positive examples even during Marius Hills training. Both issues motivate future work on label-efficient transfer learning and domain adaptation.
 
@@ -420,7 +463,7 @@ The principal conclusions of this study are:
 
     \item \textbf{Geometric augmentation is harmful on this dataset — pending leakage-free confirmation.} Training without flips and rotations outperforms the augmented model by 40\% on mean F1 and 31\% on mean AP. The Marius Hills training region has a directionally biased distribution of linear features, and augmentation breaks this spatial prior; however, the random tile split leaks overlapping pixels into validation and rewards the memorisation that augmentation suppresses, so part of the gap may be a split artefact. The comparison must be repeated with the spatial block split before this conclusion is final. Either way, augmentation strategies must be tailored to the structural properties of the target domain.
 
-    \item \textbf{Impact craters are the most reliably detected class.} Their circular symmetry and high training frequency make them robust across both the validation set (AP $\approx 0.95$) and the out-of-distribution south pole inference region (avg.\ max probability 0.863).
+    \item \textbf{Crater AP must be read against its prevalence baseline; ridges are the strongest genuine result.} The \texttt{impact\_crater} channel covers 82.1\% of all pixels (half of the tiles are fully positive), so its AP $\approx 0.95$ is only a modest lift over the 0.821 chance level — the channel behaves as a near-coverage layer, and Fig.~\ref{fig:qualitative_crater} shows that predicting ``everywhere'' is trivially correct. By contrast, \texttt{wrinkle\_ridge} has a prevalence of $6.4\times10^{-3}$, so the best ridge AP of 0.558 is ${\sim}90\times$ chance level and corresponds to a visibly accurate reconstruction of the ridge network (Fig.~\ref{fig:qualitative_ridge}). The remaining five classes have prevalences below $1.4\times10^{-4}$ — their near-zero scores reflect the absence of supervision, not a failure of the architecture.
 
     \item \textbf{South pole transfer is limited by domain shift and label scarcity.} The model accurately maps impact craters but provides only weak signals for rarer geomorphological features. Acquiring labels for even a small number of south-pole-specific tiles, or employing few-shot domain adaptation, is likely necessary for reliable multi-class south-pole mapping.
 \end{enumerate}
@@ -437,6 +480,12 @@ The principal conclusions of this study are:
 %   author={Lin, Tsung-Yi and Goyal, Priya and Girshick, Ross and He, Kaiming and Dollár, Piotr},
 %   booktitle={ICCV},
 %   year={2017}
+% }
+% @misc{zingales2026lecture,
+%   author={Zingales, Tiziano},
+%   title={Moon Features Recognition (Lecture 3b)},
+%   howpublished={Computational Physics, Physics of Data, University of Padova},
+%   year={2026}
 % }
 % @article{shorten2019augmentation,
 %   title={A survey on Image Data Augmentation for Deep Learning},
