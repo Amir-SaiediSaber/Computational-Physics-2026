@@ -63,7 +63,7 @@ class Down(nn.Module):
 
 
 class Up(nn.Module):
-    """Bilinear upsample (ConvTranspose2d) + skip-cat + DoubleConv."""
+    """Learned 2× upsampling (ConvTranspose2d) + skip-cat + DoubleConv."""
 
     def __init__(self, in_ch: int, out_ch: int, use_residual: bool = False):
         super().__init__()
@@ -91,18 +91,22 @@ class OutConv(nn.Module):
 
 
 class SmallUNet(nn.Module):
-    """3-level U-Net for multi-label pixel-wise segmentation.
+    """U-Net with 3 down/up stages (4 resolution levels) for multi-label
+    pixel-wise segmentation.
 
-    Spatial flow with base_width=32 and 128×128 input:
+    Spatial flow with base_width=32 and the 256×256 training tiles:
 
-        (3, 128,128) → inc   → (32, 128,128)  ← skip 1
-                     → down1 → (64,  64, 64)   ← skip 2
-                     → down2 → (128, 32, 32)   ← skip 3
-                     → down3 → (256, 16, 16)   bottleneck [dropout here]
-                     → up1   → (128, 32, 32)   + skip 3
-                     → up2   → (64,  64, 64)   + skip 2
-                     → up3   → (32, 128,128)   + skip 1
-                     → outc  → (C,  128,128)   logits
+        (3, 256,256) → inc   → (32, 256,256)  ← skip 1
+                     → down1 → (64, 128,128)   ← skip 2
+                     → down2 → (128, 64, 64)   ← skip 3
+                     → down3 → (256, 32, 32)   bottleneck [dropout here]
+                     → up1   → (128, 64, 64)   + skip 3
+                     → up2   → (64, 128,128)   + skip 2
+                     → up3   → (32, 256,256)   + skip 1
+                     → outc  → (C,  256,256)   logits
+
+    The network is fully convolutional, so any input size divisible by 8
+    works; odd intermediate sizes are handled by padding in Up.
 
     Args:
         in_channels:  input channels (3 for norm+CLAHE+Sobel).
