@@ -19,9 +19,18 @@ class Predictor:
         self.model.to(self.device)
 
         if weights_path:
-            weights = torch.load(str(weights_path), map_location=self.device)
-            if isinstance(weights, dict) and 'model' in weights:
-                weights = weights['model']
+            # weights_only=False: torch>=2.6 defaults to True, which rejects our
+            # checkpoints (they embed a pandas metrics DataFrame next to the
+            # state dict). Only load checkpoints produced by this project.
+            weights = torch.load(str(weights_path), map_location=self.device,
+                                 weights_only=False)
+            if isinstance(weights, dict):
+                # 'model' = legacy local checkpoints; 'state_dict' = the
+                # CloudVeneto training-script checkpoints (with 'results' df)
+                for key in ('state_dict', 'model'):
+                    if key in weights:
+                        weights = weights[key]
+                        break
             flat = {k.replace('model.', '', 1): v for k, v in weights.items()}
             # strict=False tolerates legacy checkpoints (e.g. saved without the
             # residual projection layers), but a silent mismatch would mean
