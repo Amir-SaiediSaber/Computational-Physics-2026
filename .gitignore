@@ -11,3 +11,11 @@ memory/
 CLAUDE.md
 data/
 */notebooks/catboost_info
+
+# LaTeX build artifacts
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.pdf
+report/*.synctex.gz
