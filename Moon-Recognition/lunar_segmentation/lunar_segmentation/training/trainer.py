@@ -114,33 +114,45 @@ def multilabel_metrics(
     the preferred metric when comparing models with different loss functions
     (e.g. BCEDice vs FocalDice) whose output probabilities live on different
     scales.
+
+    Memory: sigmoid/threshold are computed one class at a time instead of
+    materialising full (N, C, H, W) prob/pred tensors — for 3 186 tiles of
+    256x256x7 that saves ~12 GB of peak RAM with identical results.
+
+    A class with zero positive pixels in the set gets AP/precision/recall
+    = NaN ('support' column gives the positive-pixel count): AP is undefined
+    without positives, and counting it as 0 would penalise the model for the
+    data split rather than its predictions.  pandas .mean() skips NaN, so
+    macro averages are taken over the classes actually present.
     """
     from ..data.preprocessing import CLASS_NAMES
 
-    probs = torch.sigmoid(logits)           # (N, C, H, W)
-    preds = (probs > threshold).float()
-
     per_class = []
     for i, name in enumerate(CLASS_NAMES):
-        # Flatten spatial dims → (N*H*W,)
-        p      = preds[:, i].reshape(-1).cpu().numpy()
-        t      = targets[:, i].reshape(-1).cpu().numpy()
-        prob_i = probs[:, i].reshape(-1).cpu().numpy()
+        # Flatten spatial dims → (N*H*W,), one class at a time
+        prob_i = torch.sigmoid(logits[:, i]).reshape(-1).cpu().numpy()
+        t      = targets[:, i].reshape(-1).cpu().numpy().astype(np.float32)
+        p      = (prob_i > threshold).astype(np.float32)
 
         tp = float((p * t).sum())
         fp = float((p * (1 - t)).sum())
         fn = float(((1 - p) * t).sum())
-        precision = tp / (tp + fp + eps)
-        recall    = tp / (tp + fn + eps)
-        f1        = 2 * precision * recall / (precision + recall + eps)
-        iou       = tp / (tp + fp + fn + eps)
-        # AP requires at least one positive pixel; zero otherwise
-        ap = float(average_precision_score(t, prob_i)) if t.sum() > 0 else 0.0
+        support = int(t.sum())
+
+        if support > 0:
+            precision = tp / (tp + fp + eps)
+            recall    = tp / (tp + fn + eps)
+            f1        = 2 * precision * recall / (precision + recall + eps)
+            iou       = tp / (tp + fp + fn + eps)
+            ap        = float(average_precision_score(t, prob_i))
+        else:
+            precision = recall = f1 = iou = ap = float('nan')
 
         per_class.append({
             'class': name, 'precision': precision, 'recall': recall,
-            'f1': f1, 'iou': iou, 'ap': ap,
+            'f1': f1, 'iou': iou, 'ap': ap, 'support': support,
         })
+        del prob_i, t, p
     return pd.DataFrame(per_class)
 
 
@@ -202,9 +214,9 @@ class Trainer:
         with torch.no_grad():
             for x, y in loader:
                 x = x.to(self.device)
-                y = y.to(self.device)
                 all_logits.append(self.model(x).cpu())
-                all_targets.append(y.cpu())
+                # bool storage: targets are binary masks, 4x smaller than float32
+                all_targets.append(y.bool())
 
         if not all_logits:
             return None
