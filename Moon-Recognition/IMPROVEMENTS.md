@@ -62,6 +62,14 @@ explanation and is now cited in the report.
    and it is NOT the full 24 h campaign: only the aug/no-aug pair at the
    best config (2 runs × ~2.2 h ≈ 4–5 h on the T4; optionally + the BCEDice
    baseline ≈ 7 h).
+   **Local fallback (CloudVeneto GPUs booked):**
+   `scripts/train_spatial_ablation.py` runs the paired comparison on MPS —
+   identical split/init/schedule for both arms, only augmentation differs,
+   so the comparison is internally valid at reduced scale. Measured
+   34.9 s/epoch at 600 tiles on this machine → `--tiles 6000 --epochs 15`
+   ≈ 3 h (directional answer, launched 2026-06-10), full protocol locally
+   ≈ 14 h + ~13 GB RAM. The T4 full-protocol run remains the definitive
+   confirmation.
 2. Optionally re-run Studies 1–2 on the spatial split for leakage-free
    absolute numbers (relative rankings are expected to be more stable).
 3. South-pole inference re-run with the new 256/128 window defaults
