@@ -20,11 +20,34 @@ all subsequent work on the `U-net` branch.
 | `50ab819` | `configs/unet_config.yaml` | Config described an early local protocol (batch 8, 20 epochs); every reported result uses the T4 protocol (batch 16, 30 epochs, cosine 1e-3→1e-5) | Config now records the definitive protocol + the local prototyping variant + best architecture/loss |
 | `89b9e7d` | `report/moon_recognition.tex`, `preview.tex` | Report claims diverged from the code: wrong split description, wrong CLAHE params, "non-overlapping" tiles, phantom gradient clipping, dilation order, **wrong citation** (bib entry was the DeepLabv3+ paper, unrelated to augmentation), no mention of split leakage | All claims aligned with the code; new explicit "Limitation" paragraph with the 100%-overlap measurement; Study 3 analysis now separates the geological explanation from the leakage confound and marks the conclusion as pending re-validation; citation replaced with Shorten & Khoshgoftaar 2019 (augmentation survey); `amssymb` added (pre-existing compile error on `\checkmark`); compile verified clean |
 
+| `3ca8b16` | `inference/predictor.py` | (a) torch ≥ 2.6 (`weights_only=True` default) rejects our checkpoints, which embed a pandas results DataFrame; (b) `Predictor` only unwrapped a `'model'` key, but the CloudVeneto checkpoints use `'state_dict'` | Pass `weights_only=False` (own checkpoints only) and unwrap `'state_dict'` then `'model'` |
+| `fab9550` | `scripts/qualitative_eval.py` (new), 2 figures | Lecture 3b slide "Qualitative evaluation is required" — the report had no GT/prediction/FP-FN comparison on validation tiles | Script reproduces the seed-42 split, runs BCEDice vs +both/no-aug on the same 3 ridge-rich validation tiles (MPS), outputs TP/FP/FN overlays |
+| `bf0341d` | `report/moon_recognition.tex` | **Mask-channel audit finding** (full 15 931-tile pass): `impact_crater` = 82.1% of all pixels, 50.7% of tiles fully covered → near-coverage layer, the exact trap of lecture slides 23/27/45; crater AP 0.95 is a modest lift over the 0.821 chance baseline (chance AP = prevalence) | Prevalence table added; crater claims reframed in Study 1, south pole, and conclusions; `wrinkle_ridge` (AP 0.558 at 0.0064 prevalence ≈ 90× chance) promoted to headline result; rare-class zeros re-attributed to absent supervision (≤ 1.4e-4 prevalence); new Qualitative Evaluation subsection; Study 3 strengthened with the lecture's own rotation/illumination caution |
+
+## Consistency with Lecture 3b (prof's hints)
+
+Checked the full deck (`Lecture_3b_Moon_Recognition.pdf`) against the pipeline:
+aligned on sigmoid-per-channel outputs, logits-during-training, BCE/Dice/Focal
+losses, per-channel metrics, joint image–mask augmentation, package structure,
+small-model constraint, and the git workflow (one branch per model, no large
+files). The lecture *explicitly recommends spatial-block splits over random
+tile splits* (slides 24/38) — implemented in `data/splits.py` (`402bb62`);
+the published runs predate this and used the random split (open item 1).
+The lecture's caution on "arbitrary rotations if illumination direction
+carries physical meaning" (slide 36) supports the Study 3 geological
+explanation and is now cited in the report.
+
 ## Verification performed
 
 - `multilabel_metrics` refactor: asserted identical to the previous
   implementation (1e-12) on synthetic data, including the bool-target path,
   in the project env (`stellar`, torch 2.11).
+- Mask-channel audit: single pass over all 15 931 tiles (`data/MR/tiles`),
+  per-channel positive fractions — impact_crater 0.8213 (8 080 tiles >99%
+  covered), wrinkle_ridge 6.38e-3, lobate_scarp 1.34e-4, pit_skylight 4.2e-5,
+  irregular_mare_patch 2.0e-5, apollo_site 1.5e-5, candidate_rille 1.0e-5.
+- Qualitative figures inspected: ridge panels show real model differences
+  (best model more complete than baseline); crater panels confirm saturation.
 - `spatial_train_val_split`: run on the real `data/MR/tiles/index.csv`;
   `assert_no_overlap` passes; leakage of the old random split measured at
   100% of val tiles.
@@ -35,7 +58,10 @@ all subsequent work on the `U-net` branch.
 
 1. **Re-run Study 3 (augmentation) with `spatial_train_val_split`.** The
    "no augmentation is better" result is confounded by split leakage; the
-   report now says so explicitly. This is the single most important re-run.
+   report now says so explicitly. This is the single most important re-run —
+   and it is NOT the full 24 h campaign: only the aug/no-aug pair at the
+   best config (2 runs × ~2.2 h ≈ 4–5 h on the T4; optionally + the BCEDice
+   baseline ≈ 7 h).
 2. Optionally re-run Studies 1–2 on the spatial split for leakage-free
    absolute numbers (relative rankings are expected to be more stable).
 3. South-pole inference re-run with the new 256/128 window defaults
