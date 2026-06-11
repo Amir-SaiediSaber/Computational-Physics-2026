@@ -54,22 +54,24 @@ explanation and is now cited in the report.
 - `resolver.py`: module imports; no `local_file` modes remain.
 - Report: compiles with zero LaTeX errors via `preview.tex`.
 
-## Open items (require a CloudVeneto re-run, not doable locally)
+## Open items
 
-1. **Re-run Study 3 (augmentation) with `spatial_train_val_split`.** The
-   "no augmentation is better" result is confounded by split leakage; the
-   report now says so explicitly. This is the single most important re-run —
-   and it is NOT the full 24 h campaign: only the aug/no-aug pair at the
-   best config (2 runs × ~2.2 h ≈ 4–5 h on the T4; optionally + the BCEDice
-   baseline ≈ 7 h).
-   **Local fallback (CloudVeneto GPUs booked):**
-   `scripts/train_spatial_ablation.py` runs the paired comparison on MPS —
-   identical split/init/schedule for both arms, only augmentation differs,
-   so the comparison is internally valid at reduced scale. Measured
-   34.9 s/epoch at 600 tiles on this machine → `--tiles 6000 --epochs 15`
-   ≈ 3 h (directional answer, launched 2026-06-10), full protocol locally
-   ≈ 14 h + ~13 GB RAM. The T4 full-protocol run remains the definitive
-   confirmation.
+1. **RESOLVED LOCALLY (2026-06-11) — Study 3 re-run with
+   `spatial_train_val_split`.** The aug/no-aug pair was re-trained via
+   `scripts/train_spatial_ablation.py` on MPS with identical split / init /
+   schedule per arm (only augmentation differs → internally valid paired
+   comparison). Two protocols agree:
+   - 6 000 tiles / 15 epochs: no-aug ridgeAP **0.384** vs aug **0.237**
+   - 10 000 tiles / 30 epochs: no-aug meanAP **0.2239** / ridgeAP **0.3847**
+     vs aug **0.2096** / **0.3060** — no-aug above at every epoch.
+   **Conclusion confirmed**, with an honest decomposition now in the report:
+   absolute scores were inflated by leakage (ridge AP 0.385 clean vs 0.558
+   leaky), and part of the aggregate gap was a split artefact, but the
+   direction-sensitive ridge gap persists (+26% relative) — the signature of
+   the geological/illumination explanation. `candidate_rille` has zero
+   support in the spatial val set (NaN-excluded, as designed).
+   Optional: full-protocol confirmation on the T4 when CloudVeneto frees
+   (`train_spatial_ablation.py --epochs 30`, no --tiles flag).
 2. Optionally re-run Studies 1–2 on the spatial split for leakage-free
    absolute numbers (relative rankings are expected to be more stable).
 3. South-pole inference re-run with the new 256/128 window defaults
