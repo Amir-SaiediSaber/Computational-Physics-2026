@@ -21,3 +21,5 @@ report/*.out
 report/*.toc
 report/*.pdf
 report/*.synctex.gz
+report/*.fdb_latexmk
+report/*.fls
