@@ -1,0 +1,20 @@
+# Core
+numpy
+pandas
+matplotlib
+scikit-learn
+scikit-image
+pyyaml
+tqdm
+
+# Geospatial
+rasterio
+geopandas
+shapely
+pyproj
+pyogrio
+
+# Deep Learning
+torch
+torchvision
+albumentations

@@ -1,0 +1,8 @@
+# Training configuration for lunar segmentation
+batch_size: 8  # Increased from 4 for better convergence
+lr: 0.001
+epochs: 20     # Increased from 5 for proper convergence
+tile_size: 256  # Use 256x256 tiles for training (more context)
+stride: 128     # 50% overlap for 256x256 tiles
+augment: true  # Enable data augmentation
+seed: 42       # Random seed for reproducibility
