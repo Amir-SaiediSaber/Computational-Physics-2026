@@ -1,4 +1,3 @@
-# Computational-Physics-2026
 # Moon Feature Recognition — Mask R-CNN 
 
 This branch is my contribution to the Moon Feature Recognition group project in
@@ -113,4 +112,5 @@ should win on per-pixel coverage on the dense semantic channels.
 The Marius Hills tiles, the lunar_segmentation preprocessing pipeline, and the
 overall project structure were provided as part of the course. My contribution
 is the Mask R-CNN side of the four-method comparison.
-You could find report, notebook and related files of my project in moon_recognition section.
+
+— *Amirmohammad Saiedi Saber*
