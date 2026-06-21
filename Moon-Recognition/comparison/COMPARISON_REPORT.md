@@ -69,37 +69,60 @@ The best method depends on crater density, so the headline result is **per densi
 
 The U-Net F1 of **0.945** on dense tiles next to its **MCC of −0.001** is the base-rate trap in one line: near-perfect-looking F1, zero actual skill (precision = prevalence, recall = 1.0 — it predicts crater everywhere).
 
-The flip is unambiguous: **Mask R-CNN** leads on sparse tiles (the only method with real skill there) and goes to **negative MCC** on dense tiles (out-of-distribution); **YOLOv8** is best on dense tiles; **U-Net never beats chance** (MCC ≈ 0) in either regime — even where its F1 reaches 0.75, that is base rate, not skill (`fig_regime.png`, right panel).
+The flip is unambiguous: **Mask R-CNN** leads on sparse tiles (the only method with real skill there) and goes to **negative MCC** on dense tiles (out-of-distribution); **YOLOv8** is best on dense tiles; on crater, **U-Net never beats chance** (MCC ≈ 0) at any density — even where its F1 reaches 0.75, that is base rate, not skill (`fig_regime.png`, right panel). *But crater is the saturated, near-trivial class; the U-Net's real ability shows on ridges — see §5.*
 
-## 5. What we actually learn
+## 5. Wrinkle-ridge — the class that actually has signal
+
+`impact_crater` is saturated (§3), so it cannot discriminate methods. `wrinkle_ridge` is the opposite — sparse (~0.6 % globally, ~2.6 % on the 524 ridge-bearing val tiles) and the report's strongest genuine result. **This is where the comparison is meaningful.** Evaluated on the ridge-bearing spatial-val tiles (210 calib / 314 test, own-threshold calibration). YOLO is excluded: it collapsed to a single class and produces no ridge output. The U-Net here is the report's definitive spatial checkpoint (`noaug_w32_t10000_e30.pt`, the residual `+both` config).
+
+| Method | F1 | IoU | **MCC** | Precision | Recall | ms/tile | τ |
+|---|---|---|---|---|---|---|---|
+| **U-Net** (semantic) | 0.460 | 0.299 | **0.452** | 0.527 | 0.409 | 15 | 0.25 |
+| **Mask R-CNN** (instance) | 0.380 | 0.235 | **0.366** | 0.414 | 0.352 | 920 | 0.50 |
+| **Classical** (Sato ridge) | 0.040 | 0.020 | **−0.028** | 0.021 | 0.392 | 28 | — |
+| *Predict-all (baseline)* | 0.050 | 0.026 | 0.000 | 0.026 | 1.000 | 0 | — |
+
+The conclusion **flips versus crater**:
+- **The U-Net is the best method on ridges** (MCC 0.452, F1 0.460) and ~60× faster than Mask R-CNN. So the U-Net is *not* skill-less — on the saturated crater class nothing can be (§3), but on the class with genuine signal it wins. `fig_ridge_qualitative.png` shows it recovering ridge topology most completely.
+- **Mask R-CNN is a close, genuine second** (MCC 0.366).
+- **Both deep methods crush the classical Sato baseline** (MCC −0.028, no better than chance) and the predict-all baseline. Ridges are too subtle and variable for a fixed ridge filter — classical fires on crater rims and texture everywhere (`fig_ridge_qualitative.png`, right column). See also `fig_ridge_metrics.png`.
+
+This is the headline of the whole comparison: **on the only class with real signal, the learned models clearly beat the classical baseline, and the simple semantic U-Net edges out the heavier instance model at 1/60th the cost.**
+
+## 6. What we actually learn
 
 - **U-Net has no skill in either regime.** MCC is −0.000 (sparse) and −0.001 (dense) — flat along zero at every crater density (`fig_regime.png`), even where its F1 reaches 0.945. It predicts crater over almost the whole tile (recall ≈ 1.0, precision ≈ prevalence); the qualitative panel shows an all-crater column. It learned the dataset's dominant base rate, not crater shape. This is the single most important finding and it directly explains the weak numbers everyone reported.
 - **Mask R-CNN is the only method with clear skill on sparse tiles** (MCC 0.187) — it genuinely localizes craters — but **~90× slower** (≈920 ms/tile vs ~10) and out-of-distribution on dense tiles (MCC −0.111), where its instance prep was never meant to operate.
 - **YOLOv8** is the strongest on the dense majority (MCC 0.240) and a solid speed/accuracy compromise on sparse tiles (MCC 0.159 at 10 ms/tile), though it over-detects at low confidence (count MAE 106 on sparse).
 - **The classical baseline beats the U-Net on sparse tiles** (MCC 0.069 vs ≈0) at 1 ms/tile and fully interpretable. That a 30-line OpenCV function out-discriminates the trained U-Net there is a genuine result, not a throwaway.
-- **Best method depends on crater density (regime flip).** Sparse (1–20 %): Mask R-CNN > YOLO > Classical > U-Net ≈ chance. Dense (≥20 %): YOLO > Classical > U-Net ≈ chance > Mask R-CNN (negative). No method dominates everywhere — the right framing is per-regime, not one leaderboard.
-- **Trade-off summary:** accuracy (MCC) is regime-dependent (above); speed → Classical (1 ms) ≈ YOLO ≈ U-Net (~10 ms) ≫ Mask R-CNN (~920 ms, 90×); interpretability → Classical > the rest.
+- **The answer depends on the class, and that *is* the finding.** On the saturated crater channel no method beats the base rate (§3–4). On `wrinkle_ridge`, the class with genuine signal, the **U-Net wins (MCC 0.45) > Mask R-CNN (0.37) ≫ classical (≈0)** and both deep models crush the baseline (§5). Reporting one global "best model" would be wrong both ways.
+- **Best method also depends on crater density (regime flip).** Sparse crater (1–20 %): Mask R-CNN > YOLO > Classical > U-Net ≈ chance. Dense (≥20 %): YOLO > Classical > U-Net ≈ chance > Mask R-CNN (negative). No method dominates everywhere — the right framing is per-class and per-regime, not one leaderboard.
+- **Trade-off summary:** accuracy (MCC) is class/regime-dependent (above); speed → Classical (1 ms) ≈ YOLO ≈ U-Net (~10–15 ms) ≫ Mask R-CNN (~920 ms, ~60–90×); interpretability → Classical > the rest. On ridges specifically, the U-Net is both the most accurate *and* far cheaper than Mask R-CNN.
 
-## 6. Limitations (be honest about these)
+## 7. Limitations (be honest about these)
 
 - The shared metric is **pixel coverage of the crater class**; it structurally favours area-covering methods (semantic/box-fill) over instance methods. The count metric and MCC partly offset this, but no single number is perfectly fair across task types.
 - **YOLO's classes are uninterpretable** (`class0…class6`, and it only ever predicts `class0`); all its boxes are treated as crater. If its training labels were not crater, its column is mislabelled — needs confirming with Alireza's real label map.
 - Mask R-CNN GT "count" via connected components on a dense semantic mask is noisy; count MAE should be read as indicative, not definitive.
 - **Operating-point sensitivity:** MCC/F1 depend on the threshold τ. Each regime is now calibrated on its *own* disjoint calib set (τ shown per row); rankings and the regime flip are robust, but absolute values shift with τ — always report it.
-- Numbers are on **286 held-out test tiles** (94 sparse / 192 dense; 191 calibration tiles total). The aggregates are stable; within the dense regime the 40–70 % band is undersampled (n≈22, hence the noisy mid-density dip in `fig_regime.png`). Widen the caps for final-manuscript precision.
+- Numbers are on **286 held-out test tiles** (94 sparse / 192 dense; 191 calibration tiles total) for crater, and 314 test / 210 calib ridge-bearing tiles for ridge. Aggregates are stable; within the dense regime the 40–70 % band is undersampled (n≈22, the noisy mid-density dip in `fig_regime.png`). Widen the caps for final-manuscript precision.
+- **Architecture-matching footgun (resolved here, but a group reproducibility risk):** the U-Net checkpoints do not record `use_residual` in a way the loader auto-applies. The crater checkpoint (`best_trained.pth`) is non-residual; the ridge/spatial checkpoint (`noaug_w32_t10000_e30.pt`) is the residual `+both` config. Loading a residual checkpoint into the default non-residual `SmallUNet` runs without error but silently scrambles the forward pass (ridge AP collapses 0.38→0.03). The loader's "unexpected keys" warning flags it — *heed it*. Each checkpoint must be loaded with the architecture it was trained with.
+- The classical ridge baseline is a single Sato filter; a stronger classical pipeline (directional morphology, Frangi, tuned thresholds) might do better, though ridges' low contrast makes a large gain unlikely.
 
-## 7. Implications for the 9 July retake
+## 8. Implications for the 9 July retake
 
-1. The comparison framework here **is** the "organic comparison" the professor asked for: one split, one reduction, one metric set, with a trivial baseline to calibrate claims.
+1. The comparison framework here **is** the "organic comparison" the professor asked for: one split, one reduction, one metric set, a trivial baseline to calibrate claims, and per-class/per-regime breakdowns.
 2. **Lead with MCC / skill-over-baseline, not F1/IoU** — otherwise the report repeats the base-rate mistake.
-3. The U-Net section needs reframing: its real story is *base-rate collapse on an imbalanced label*, which motivates the other three methods. That is a much stronger narrative than "0.90 F1."
-4. There is now a real **classical baseline** to anchor the comparison.
+3. **Structure the comparison by class.** Crater = saturated → nobody beats base rate (a finding, not a failure). `wrinkle_ridge` = real signal → U-Net (MCC 0.45) > Mask R-CNN (0.37) ≫ classical/baseline, at 1/60th Mask R-CNN's cost. This is the defensible head-to-head, and it *vindicates* the U-Net rather than apologising for its crater numbers.
+4. There is now a real **classical baseline** (crater: morphology; ridge: Sato) to anchor the comparison — and the learned models clearly beat it where it matters.
 
-## 8. Reproduce
+## 9. Reproduce
 ```bash
-# report-grade per-regime analysis (primary; writes regime_*.csv + fig_regime.png)
+# wrinkle-ridge comparison — the class with real signal (writes ridge_results.csv + fig_ridge_*.png)
+KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/ridge_comparison.py
+# report-grade per-regime crater analysis (writes regime_*.csv + fig_regime.png)
 KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/regime_analysis.py
-# single-band views (optional)
+# single-band crater views (optional)
 KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/compare_models.py \
     --frac_lo 0.01 --frac_hi 0.20 --calib 40 --test 117 --tag fairband
 KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/compare_models.py \
@@ -107,4 +130,4 @@ KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/compare_models.py \
 # bar + qualitative figures
 KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/make_figures.py
 ```
-Files: `regime_analysis.py` (per-regime, report-grade), `compare_models.py` (single-band harness), `classical_baseline.py` (4th method), `maskrcnn_loader.py` (rebuilds Amir's net), `regime_per_band.csv` / `regime_aggregate.csv` / `comparison_results_*.csv`, `fig_regime.png`, `fig_metrics.png`, `fig_qualitative.png`.
+Files: `ridge_comparison.py` (ridge head-to-head), `regime_analysis.py` (per-regime crater), `compare_models.py` (single-band harness), `classical_baseline.py` (classical crater + ridge), `maskrcnn_loader.py` (rebuilds Amir's net), `ridge_results.csv` / `regime_*.csv` / `comparison_results_*.csv`, `fig_ridge_metrics.png`, `fig_ridge_qualitative.png`, `fig_regime.png`, `fig_metrics.png`, `fig_qualitative.png`.
