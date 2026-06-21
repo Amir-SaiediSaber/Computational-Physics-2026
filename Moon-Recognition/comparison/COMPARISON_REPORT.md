@@ -43,37 +43,48 @@ On such data the pixel metrics are dominated by base rate. A trivial **"predict 
 
 Two things this exposes:
 1. **The U-Net's headline 0.90 F1 is not skill** — F1/IoU match the predict-all baseline and MCC ≈ 0. It is exploiting the base rate, nothing more.
-2. **The ranking is regime-dependent.** On these dense tiles YOLOv8 has genuine skill (MCC 0.47), whereas Mask R-CNN goes *negative* (−0.166): it is out-of-distribution here because its instance prep deliberately skips tiles with >20 % crater coverage. So "which model is best" depends entirely on crater density — which is itself a headline result, and a reason any single-number leaderboard is misleading.
+2. **The ranking is regime-dependent.** On these dense tiles YOLOv8 has genuine skill while Mask R-CNN goes *negative* (−0.166) — out-of-distribution, since its instance prep skips >20 % coverage tiles. "Which model is best" depends entirely on crater density. The calibrated, report-grade per-regime numbers are in §4 (this all-val snapshot uses a separate threshold calibration, so YOLO's MCC here is higher than its §4 dense figure — see the operating-point caveat in §6).
 
-## 4. The fair comparison (discriminative band)
+## 4. Report-grade per-regime comparison
 
-To compare on data where the task is actually non-trivial — and where the instance methods are in-distribution (Mask R-CNN's instance prep **skips** tiles with >20 % crater coverage, `max_channel_fraction=0.20`) — evaluation is restricted to tiles with **crater coverage 1–20 %** (157 val tiles, test prevalence ≈ 0.09).
+The best method depends on crater density, so the headline result is **per density band**, on a larger stratified sample (**418 test tiles** across six bands; each method's threshold calibrated once on a disjoint 150-tile pool). See **`fig_regime.png`** (MCC and F1 vs crater coverage) and `fig_qualitative.png`.
+
+**Sparse / discriminative regime (coverage 1–20 %, n = 148, prevalence ≈ 0.09)** — also the regime Mask R-CNN was trained for (`max_channel_fraction=0.20`):
 
 | Method | F1 | IoU | **MCC** | Precision | Recall | Count MAE | ms/tile |
 |---|---|---|---|---|---|---|---|
-| **Mask R-CNN** (instance) | 0.270 | 0.156 | **0.180** | 0.206 | 0.388 | 79 | 919 |
-| **YOLOv8** (detection) | 0.249 | 0.142 | **0.159** | 0.162 | 0.543 | 102 | 10 |
-| **Classical** (thr+morph) | 0.140 | 0.075 | **0.070** | 0.170 | 0.119 | 16 | 1 |
-| **U-Net** (semantic) | 0.170 | 0.093 | **−0.001** | 0.093 | 0.999 | 24 | 12 |
-| *Predict-all (baseline)* | *0.170* | *0.093* | *0.000* | *0.093* | *1.000* | *24* | *0* |
+| **Mask R-CNN** (instance) | 0.243 | 0.139 | **0.147** | 0.161 | 0.495 | 172 | 923 |
+| **YOLOv8** (detection) | 0.214 | 0.120 | **0.104** | 0.142 | 0.432 | 32 | 10 |
+| **Classical** (thr+morph) | 0.134 | 0.072 | **0.064** | 0.166 | 0.112 | 15 | 1 |
+| **U-Net** (semantic) | 0.168 | 0.092 | **−0.014** | 0.093 | 0.891 | 23 | 13 |
 
-(See `fig_metrics.png` and `fig_qualitative.png`.)
+**Dense regime (coverage ≥ 20 %, n = 270)** — the bulk of the dataset (~77 % of tiles):
+
+| Method | F1 | IoU | **MCC** | Precision | Recall | Count MAE | ms/tile |
+|---|---|---|---|---|---|---|---|
+| **YOLOv8** (detection) | 0.770 | 0.626 | **0.273** | 0.654 | 0.937 | 41 | 11 |
+| **U-Net** (semantic) | 0.749 | 0.599 | **0.039** | 0.602 | 0.993 | 22 | 13 |
+| **Classical** (thr+morph) | 0.343 | 0.207 | **0.064** | 0.661 | 0.231 | 34 | 1 |
+| **Mask R-CNN** (instance) | 0.197 | 0.109 | **−0.178** | 0.417 | 0.129 | 79 | 922 |
+
+The flip is unambiguous: **Mask R-CNN** leads on sparse tiles (the only method with real skill there) and goes to **negative MCC** on dense tiles (out-of-distribution); **YOLOv8** is best on dense tiles; **U-Net never beats chance** (MCC ≈ 0) in either regime — even where its F1 reaches 0.75, that is base rate, not skill (`fig_regime.png`, right panel).
 
 ## 5. What we actually learn
 
-- **U-Net has no skill on sparse-crater tiles.** Its MCC is −0.001 and its F1 equals the predict-all baseline exactly; the qualitative panel shows it predicting crater over the *entire* tile. It learned the dataset's dominant base rate, not crater shape. This is the single most important finding and it directly explains the weak numbers everyone reported.
-- **Mask R-CNN is the only method with clear skill** (MCC 0.180) — it genuinely localizes craters — **but it is ~90× slower** (919 ms/tile vs ~10) and it over-segments (count MAE 79).
-- **YOLOv8** is a strong speed/accuracy compromise (MCC 0.159 at 10 ms/tile) but over-detects badly at the low confidence its best-F1 needs (count MAE 102).
-- **The classical baseline, though weak (MCC 0.070), beats the U-Net** on the prevalence-robust metric while being 1 ms/tile and fully interpretable. That a 30-line OpenCV function out-discriminates the trained U-Net here is a genuine result, not a throwaway.
-- **Best method depends on crater density (regime flip).** Sparse tiles (1–20 %): Mask R-CNN wins (MCC 0.18), U-Net ≈ chance. Dense tiles (all-val): YOLOv8 wins (MCC 0.47), Mask R-CNN goes *negative* (out-of-distribution). No method dominates everywhere — the right framing is a per-regime comparison, not one leaderboard.
-- **Trade-off summary (fair band):** accuracy (MCC) → Mask R-CNN > YOLO > Classical > U-Net≈chance; speed → Classical ≈ YOLO ≈ U-Net ≫ Mask R-CNN (90×); interpretability → Classical > the rest.
+- **U-Net has no skill in either regime.** MCC is −0.014 (sparse) and 0.039 (dense) — flat along zero at every crater density (`fig_regime.png`). It predicts crater over almost the whole tile (recall ≈ 0.89–0.99, precision ≈ prevalence); the qualitative panel shows an all-crater column. It learned the dataset's dominant base rate, not crater shape. This is the single most important finding and it directly explains the weak numbers everyone reported.
+- **Mask R-CNN is the only method with clear skill on sparse tiles** (MCC 0.147) — it genuinely localizes craters — but **~90× slower** (≈920 ms/tile vs ~10) and out-of-distribution on dense tiles (MCC −0.178), where its instance prep was never meant to operate.
+- **YOLOv8** is the strongest on the dense majority (MCC 0.273) and a solid speed/accuracy compromise on sparse tiles (MCC 0.104 at 10 ms/tile), though it over-detects at low confidence (count MAE 32–41).
+- **The classical baseline (MCC ≈ 0.064 in both regimes) beats the U-Net** on the prevalence-robust metric while being 1 ms/tile and fully interpretable. That a 30-line OpenCV function out-discriminates the trained U-Net is a genuine result, not a throwaway.
+- **Best method depends on crater density (regime flip).** Sparse (1–20 %): Mask R-CNN > YOLO > Classical > U-Net ≈ chance. Dense (≥20 %): YOLO > U-Net ≈ Classical > Mask R-CNN (negative). No method dominates everywhere — the right framing is per-regime, not one leaderboard.
+- **Trade-off summary:** accuracy (MCC) is regime-dependent (above); speed → Classical (1 ms) ≈ YOLO ≈ U-Net (~10 ms) ≫ Mask R-CNN (~920 ms, 90×); interpretability → Classical > the rest.
 
 ## 6. Limitations (be honest about these)
 
 - The shared metric is **pixel coverage of the crater class**; it structurally favours area-covering methods (semantic/box-fill) over instance methods. The count metric and MCC partly offset this, but no single number is perfectly fair across task types.
 - **YOLO's classes are uninterpretable** (`class0…class6`, and it only ever predicts `class0`); all its boxes are treated as crater. If its training labels were not crater, its column is mislabelled — needs confirming with Alireza's real label map.
 - Mask R-CNN GT "count" via connected components on a dense semantic mask is noisy; count MAE should be read as indicative, not definitive.
-- Numbers are on a 117-tile test sample (fair band) / 90-tile sample (all val); they are stable enough for ranking but not final-report precision. Scale up `--test` for the manuscript.
+- **Operating-point sensitivity:** MCC/F1 depend on the threshold τ. Here τ is calibrated once per method on a mixed-regime pool; a τ tuned per regime would raise some dense-tile numbers (e.g. YOLO). The *rankings and the regime flip are robust*, but absolute values shift with τ — report the calibration protocol alongside any number.
+- Report-grade numbers are on **418 test tiles** (148 sparse / 270 dense) with a 150-tile calibration pool — stable for ranking; widen the per-band caps (`K_TEST`) for final-manuscript precision.
 
 ## 7. Implications for the 9 July retake
 
@@ -84,13 +95,14 @@ To compare on data where the task is actually non-trivial — and where the inst
 
 ## 8. Reproduce
 ```bash
-# fair discriminative band
+# report-grade per-regime analysis (primary; writes regime_*.csv + fig_regime.png)
+KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/regime_analysis.py
+# single-band views (optional)
 KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/compare_models.py \
     --frac_lo 0.01 --frac_hi 0.20 --calib 40 --test 117 --tag fairband
-# full-val base-rate view
 KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/compare_models.py \
     --frac_lo 0.0 --frac_hi 1.01 --calib 30 --test 90 --tag allval
-# figures
+# bar + qualitative figures
 KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/make_figures.py
 ```
-Files: `compare_models.py` (harness), `classical_baseline.py` (4th method), `maskrcnn_loader.py` (rebuilds Amir's net), `comparison_results_*.csv`, `fig_metrics.png`, `fig_qualitative.png`.
+Files: `regime_analysis.py` (per-regime, report-grade), `compare_models.py` (single-band harness), `classical_baseline.py` (4th method), `maskrcnn_loader.py` (rebuilds Amir's net), `regime_per_band.csv` / `regime_aggregate.csv` / `comparison_results_*.csv`, `fig_regime.png`, `fig_metrics.png`, `fig_qualitative.png`.
