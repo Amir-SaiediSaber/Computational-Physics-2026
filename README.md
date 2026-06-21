@@ -26,9 +26,18 @@ tiles. Four approaches are compared on shared tiles:
 - Data: `data/MR/` (tiles, weights, results) — not tracked in git (large).
 - Trained weights >100 MB are attached to the relevant GitHub Release, not committed.
 
-## Environments
-- `stellar` — AOR stellar classification
-- `comp_lab` — Moon-Recognition (torch + torchvision + rasterio). YOLO additionally needs `pip install ultralytics`.
+## Environment
+The `stellar` conda env runs everything in this project:
+`torch torchvision ultralytics opencv-python rasterio scikit-image scikit-learn imbalanced-learn shap lightgbm catboost`.
+On macOS, set `KMP_DUPLICATE_LIB_OK=TRUE` to avoid the libomp double-init abort.
+
+## Reproduce all models
+```bash
+KMP_DUPLICATE_LIB_OK=TRUE python verify_models.py
+```
+Smoke-tests every model (loads weights + runs a few samples). The Mask R-CNN
+weights (194 MB) are not in git — fetch once with
+`gh release download v1.0 -R Amir-SaiediSaber/Computational-Physics-2026 -p best_model.pth -D data/MR/weights/`.
 
 ## Report
 See `report/` for the written comparison.
