@@ -31,14 +31,19 @@ You cannot compare an mAP against a pixel-IoU against a thresholded mask. So the
 
 The `impact_crater` channel is **extremely prevalent**: across the validation tiles its mean pixel coverage is **0.81** (median 0.96) — most tiles are almost entirely labelled crater. **2,489 of 3,248 val tiles are >70 % crater.**
 
-On such data the pixel metrics are dominated by base rate. A trivial **"predict every pixel is crater"** baseline scores **F1 ≈ 0.90, IoU ≈ 0.82** — and that is essentially what the U-Net scores on the full val set:
+On such data the pixel metrics are dominated by base rate. A trivial **"predict every pixel is crater"** baseline scores **F1 ≈ 0.90, IoU ≈ 0.82**. Full all-val results (prevalence 0.82):
 
-| (all val, prevalence 0.82) | F1 | IoU | **MCC** | recall |
-|---|---|---|---|---|
-| U-Net | 0.903 | 0.823 | **0.013** | 1.000 |
-| Predict-all baseline | 0.897 | 0.813 | **0.000** | 1.000 |
+| (all val, prevalence 0.82) | F1 | IoU | **MCC** | Precision | Recall | ms/tile |
+|---|---|---|---|---|---|---|
+| YOLOv8 | 0.916 | 0.846 | **0.470** | 0.893 | 0.940 | 9 |
+| U-Net | 0.903 | 0.823 | **0.013** | 0.823 | 1.000 | 12 |
+| *Predict-all baseline* | *0.903* | *0.823* | *0.000* | *0.823* | *1.000* | *0* |
+| Classical | 0.374 | 0.230 | **0.078** | 0.878 | 0.238 | 1 |
+| Mask R-CNN | 0.116 | 0.061 | **−0.166** | 0.616 | 0.064 | 918 |
 
-The headline 0.90 F1 is **not skill** — MCC ≈ 0 shows the U-Net is doing essentially nothing beyond exploiting the base rate. *This is exactly the kind of "looks good, means nothing" number a comparison has to expose.*
+Two things this exposes:
+1. **The U-Net's headline 0.90 F1 is not skill** — F1/IoU match the predict-all baseline and MCC ≈ 0. It is exploiting the base rate, nothing more.
+2. **The ranking is regime-dependent.** On these dense tiles YOLOv8 has genuine skill (MCC 0.47), whereas Mask R-CNN goes *negative* (−0.166): it is out-of-distribution here because its instance prep deliberately skips tiles with >20 % crater coverage. So "which model is best" depends entirely on crater density — which is itself a headline result, and a reason any single-number leaderboard is misleading.
 
 ## 4. The fair comparison (discriminative band)
 
@@ -60,7 +65,8 @@ To compare on data where the task is actually non-trivial — and where the inst
 - **Mask R-CNN is the only method with clear skill** (MCC 0.180) — it genuinely localizes craters — **but it is ~90× slower** (919 ms/tile vs ~10) and it over-segments (count MAE 79).
 - **YOLOv8** is a strong speed/accuracy compromise (MCC 0.159 at 10 ms/tile) but over-detects badly at the low confidence its best-F1 needs (count MAE 102).
 - **The classical baseline, though weak (MCC 0.070), beats the U-Net** on the prevalence-robust metric while being 1 ms/tile and fully interpretable. That a 30-line OpenCV function out-discriminates the trained U-Net here is a genuine result, not a throwaway.
-- **Trade-off summary:** accuracy (MCC) → Mask R-CNN > YOLO > Classical > U-Net≈chance; speed → Classical ≈ YOLO ≈ U-Net ≫ Mask R-CNN; interpretability → Classical > the rest.
+- **Best method depends on crater density (regime flip).** Sparse tiles (1–20 %): Mask R-CNN wins (MCC 0.18), U-Net ≈ chance. Dense tiles (all-val): YOLOv8 wins (MCC 0.47), Mask R-CNN goes *negative* (out-of-distribution). No method dominates everywhere — the right framing is a per-regime comparison, not one leaderboard.
+- **Trade-off summary (fair band):** accuracy (MCC) → Mask R-CNN > YOLO > Classical > U-Net≈chance; speed → Classical ≈ YOLO ≈ U-Net ≫ Mask R-CNN (90×); interpretability → Classical > the rest.
 
 ## 6. Limitations (be honest about these)
 
