@@ -7,6 +7,22 @@ from ..data.preprocessing import iter_tile_origins, CLASS_NAMES
 logger = logging.getLogger(__name__)
 
 
+def _remap_doubleconv_key(key: str) -> str:
+    """Map legacy DoubleConv keys to the current architecture.
+
+    Early checkpoints stored each DoubleConv as one ``nn.Sequential`` named
+    ``block`` (``block.0/1`` = first Conv+BN, ``block.3/4`` = second Conv+BN).
+    The current DoubleConv uses two named sub-Sequentials ``conv1``/``conv2``.
+    Without this remap the published weights match *no* layer names and, under
+    ``strict=False``, every conv silently keeps its random initialisation.
+    """
+    return (key
+            .replace('.block.0', '.conv1.0')
+            .replace('.block.1', '.conv1.1')
+            .replace('.block.3', '.conv2.0')
+            .replace('.block.4', '.conv2.1'))
+
+
 class Predictor:
     def __init__(
         self,
@@ -32,6 +48,10 @@ class Predictor:
                         weights = weights[key]
                         break
             flat = {k.replace('model.', '', 1): v for k, v in weights.items()}
+            # Normalise legacy DoubleConv 'block.*' naming to the current
+            # 'conv1'/'conv2' layout before loading (see _remap_doubleconv_key),
+            # otherwise these checkpoints silently load nothing under strict=False.
+            flat = {_remap_doubleconv_key(k): v for k, v in flat.items()}
             # strict=False tolerates legacy checkpoints (e.g. saved without the
             # residual projection layers), but a silent mismatch would mean
             # predicting with randomly initialised layers — so surface it loudly.
