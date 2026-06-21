@@ -27,3 +27,4 @@ report/*.fls
 *.pt
 *.onnx
 Moon-Recognition/yolo/YOLO/runs/**/weights/
+catboost_info/
