@@ -73,19 +73,21 @@ The flip is unambiguous: **Mask R-CNN** leads on sparse tiles (the only method w
 
 ## 5. Wrinkle-ridge — the class that actually has signal
 
-`impact_crater` is saturated (§3), so it cannot discriminate methods. `wrinkle_ridge` is the opposite — sparse (~0.6 % globally, ~2.6 % on the 524 ridge-bearing val tiles) and the report's strongest genuine result. **This is where the comparison is meaningful.** Evaluated on the ridge-bearing spatial-val tiles (210 calib / 314 test, own-threshold calibration). YOLO is excluded: it collapsed to a single class and produces no ridge output. The U-Net here is the report's definitive spatial checkpoint (`noaug_w32_t10000_e30.pt`, the residual `+both` config).
+`impact_crater` is saturated (§3), so it cannot discriminate methods. `wrinkle_ridge` is the opposite — sparse (~0.6 % globally, ~2.6 % on the 524 ridge-bearing val tiles) and the report's strongest genuine result. **This is where the comparison is meaningful.** Evaluated on the ridge-bearing spatial-val tiles (210 calib / 314 test, own-threshold calibration). The U-Net here is the report's definitive spatial checkpoint (`noaug_w32_t10000_e30.pt`, the residual `+both` config). The YOLO entry is the **train-5** run: it was trained on `yolo_dataset_no_class0` (crater dropped, channels re-indexed), so its `class1` — the only class it ever detects — is `wrinkle_ridge`; its boxes are painted as a ridge score map, fed the same 3-channel input its training PNGs used.
 
 | Method | F1 | IoU | **MCC** | Precision | Recall | ms/tile | τ |
 |---|---|---|---|---|---|---|---|
-| **U-Net** (semantic) | 0.460 | 0.299 | **0.452** | 0.527 | 0.409 | 15 | 0.25 |
-| **Mask R-CNN** (instance) | 0.380 | 0.235 | **0.366** | 0.414 | 0.352 | 920 | 0.50 |
-| **Classical** (Sato ridge) | 0.040 | 0.020 | **−0.028** | 0.021 | 0.392 | 28 | — |
+| **U-Net** (semantic) | 0.460 | 0.299 | **0.452** | 0.527 | 0.409 | 20 | 0.25 |
+| **Mask R-CNN** (instance) | 0.380 | 0.235 | **0.366** | 0.414 | 0.352 | 1130 | 0.50 |
+| **YOLOv8 train-5** (detection) | 0.099 | 0.052 | **0.076** | 0.063 | 0.228 | 10 | 0.01 |
+| **Classical** (Sato ridge) | 0.040 | 0.020 | **−0.028** | 0.021 | 0.392 | 29 | — |
 | *Predict-all (baseline)* | 0.050 | 0.026 | 0.000 | 0.026 | 1.000 | 0 | — |
 
 The conclusion **flips versus crater**:
-- **The U-Net is the best method on ridges** (MCC 0.452, F1 0.460) and ~60× faster than Mask R-CNN. So the U-Net is *not* skill-less — on the saturated crater class nothing can be (§3), but on the class with genuine signal it wins. `fig_ridge_qualitative.png` shows it recovering ridge topology most completely.
+- **The U-Net is the best method on ridges** (MCC 0.452, F1 0.460) and ~55× faster than Mask R-CNN. So the U-Net is *not* skill-less — on the saturated crater class nothing can be (§3), but on the class with genuine signal it wins. `fig_ridge_qualitative.png` shows it recovering ridge topology most completely.
 - **Mask R-CNN is a close, genuine second** (MCC 0.366).
-- **Both deep methods crush the classical Sato baseline** (MCC −0.028, no better than chance) and the predict-all baseline. Ridges are too subtle and variable for a fixed ridge filter — classical fires on crater rims and texture everywhere (`fig_ridge_qualitative.png`, right column). See also `fig_ridge_metrics.png`.
+- **YOLO train-5 has real but weak ridge skill** (MCC 0.076 — positive, unlike classical). Its positive score doubles as empirical confirmation of the `no_class0` re-indexing (a wrong label mapping would score ≈0). The weakness is representational, not just training: axis-aligned box fill is a poor match for thin diagonal linear features (precision 0.063), whereas the pixel-level methods can trace them. A four-way task-type lesson in one row.
+- **All three learned methods beat the classical Sato baseline** (MCC −0.028, no better than chance) and the predict-all baseline. Ridges are too subtle and variable for a fixed ridge filter — classical fires on crater rims and texture everywhere (`fig_ridge_qualitative.png`, right column). See also `fig_ridge_metrics.png`.
 
 This is the headline of the whole comparison: **on the only class with real signal, the learned models clearly beat the classical baseline, and the simple semantic U-Net edges out the heavier instance model at 1/60th the cost.**
 
@@ -107,7 +109,7 @@ Only the third row reproduces Table 12's signature. **Table 12 was produced by t
 - **Mask R-CNN is the only method with clear skill on sparse tiles** (MCC 0.187) — it genuinely localizes craters — but **~90× slower** (≈920 ms/tile vs ~10) and out-of-distribution on dense tiles (MCC −0.111), where its instance prep was never meant to operate.
 - **YOLOv8** is the strongest on the dense majority (MCC 0.240) and a solid speed/accuracy compromise on sparse tiles (MCC 0.159 at 10 ms/tile), though it over-detects at low confidence (count MAE 106 on sparse).
 - **The classical baseline beats the U-Net on sparse tiles** (MCC 0.069 vs ≈0) at 1 ms/tile and fully interpretable. That a 30-line OpenCV function out-discriminates the trained U-Net there is a genuine result, not a throwaway.
-- **The answer depends on the class, and that *is* the finding.** On the saturated crater channel no method beats the base rate (§3–4). On `wrinkle_ridge`, the class with genuine signal, the **U-Net wins (MCC 0.45) > Mask R-CNN (0.37) ≫ classical (≈0)** and both deep models crush the baseline (§5). Reporting one global "best model" would be wrong both ways.
+- **The answer depends on the class, and that *is* the finding.** On the saturated crater channel no method beats the base rate (§3–4). On `wrinkle_ridge`, the class with genuine signal, the **U-Net wins (MCC 0.45) > Mask R-CNN (0.37) ≫ YOLO train-5 (0.08) > classical (≈0)** — every learned method beats the classical baseline, and pixel-level methods beat box-level ones on linear features (§5). Reporting one global "best model" would be wrong both ways.
 - **Best method also depends on crater density (regime flip).** Sparse crater (1–20 %): Mask R-CNN > YOLO > Classical > U-Net ≈ chance. Dense (≥20 %): YOLO > Classical > U-Net ≈ chance > Mask R-CNN (negative). No method dominates everywhere — the right framing is per-class and per-regime, not one leaderboard.
 - **Trade-off summary:** accuracy (MCC) is class/regime-dependent (above); speed → Classical (1 ms) ≈ YOLO ≈ U-Net (~10–15 ms) ≫ Mask R-CNN (~920 ms, ~60–90×); interpretability → Classical > the rest. On ridges specifically, the U-Net is both the most accurate *and* far cheaper than Mask R-CNN.
 
@@ -125,7 +127,7 @@ Only the third row reproduces Table 12's signature. **Table 12 was produced by t
 
 1. The comparison framework here **is** the "organic comparison" the professor asked for: one split, one reduction, one metric set, a trivial baseline to calibrate claims, and per-class/per-regime breakdowns.
 2. **Lead with MCC / skill-over-baseline, not F1/IoU** — otherwise the report repeats the base-rate mistake.
-3. **Structure the comparison by class.** Crater = saturated → nobody beats base rate (a finding, not a failure). `wrinkle_ridge` = real signal → U-Net (MCC 0.45) > Mask R-CNN (0.37) ≫ classical/baseline, at 1/60th Mask R-CNN's cost. This is the defensible head-to-head, and it *vindicates* the U-Net rather than apologising for its crater numbers.
+3. **Structure the comparison by class.** Crater = saturated → nobody beats base rate (a finding, not a failure). `wrinkle_ridge` = real signal → U-Net (MCC 0.45) > Mask R-CNN (0.37) ≫ YOLO train-5 (0.08) > classical/baseline, at a fraction of Mask R-CNN's cost. This is the defensible head-to-head — now genuinely four-way, one method per teammate plus the classical anchor — and it *vindicates* the U-Net rather than apologising for its crater numbers.
 4. There is now a real **classical baseline** (crater: morphology; ridge: Sato) to anchor the comparison — and the learned models clearly beat it where it matters.
 
 ## 9. Reproduce
