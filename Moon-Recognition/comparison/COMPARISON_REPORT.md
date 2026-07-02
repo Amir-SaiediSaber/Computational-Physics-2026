@@ -89,6 +89,18 @@ The conclusion **flips versus crater**:
 
 This is the headline of the whole comparison: **on the only class with real signal, the learned models clearly beat the classical baseline, and the simple semantic U-Net edges out the heavier instance model at 1/60th the cost.**
 
+## 5b. South-pole reconciliation — why the manuscript's two tables disagree (SOLVED)
+
+The June manuscript contained two contradicting south-pole result sets: the U-Net section's Table 8 (crater avg-max-prob 0.86, other classes near zero) and the duplicate section's Table 12 (ALL seven classes ≈262,144 detections — every pixel — avg-max-prob 0.48–0.54). The professor flagged this incoherence. `giuseppe_preproc_check.py` tests the two candidate mechanisms on the same south-pole tiles (8 tiles; per-tile max prob averaged; fraction of pixels above the workflow's own 0.1 display threshold):
+
+| Configuration | crater max-prob | other 6 classes max-prob | pixels > 0.1 |
+|---|---|---|---|
+| trained weights + package preprocessing (Table 8 conditions) | 0.996 | 0.00–0.14 | crater only |
+| trained weights + the duplicate workflow's OpenCV preprocessing | 0.832 | 0.00–0.06 | crater only |
+| **random weights (pre-fix loader behaviour)** | **0.485** | **0.48–0.54** | **100 % — every class** |
+
+Only the third row reproduces Table 12's signature. **Table 12 was produced by the checkpoint-loading bug**: the pre-fix `Predictor` loaded `best_trained.pth` with `strict=False` against legacy `block.*` key names, silently matched zero conv layers, and ran inference on randomly initialised weights — sigmoid of random logits ≈ 0.5 everywhere, so every pixel of every class clears a 0.1 threshold. The workflow's OpenCV-vs-skimage preprocessing mismatch (CLAHE clipLimit 2.0/8×8 grid vs `equalize_adapthist` 0.03; max-normalised Sobel vs `filters.sobel`) is real and measurably degrades the crater response (0.996 → 0.832), but it does NOT produce the uniform-0.5 pattern. For the retake report: drop Table 12, keep one south-pole section, and cite the loader fix (`inference/predictor.py`) — the contradiction has a demonstrated root cause, not a modelling disagreement.
+
 ## 6. What we actually learn
 
 - **U-Net has no skill in either regime.** MCC is −0.000 (sparse) and −0.001 (dense) — flat along zero at every crater density (`fig_regime.png`), even where its F1 reaches 0.945. It predicts crater over almost the whole tile (recall ≈ 1.0, precision ≈ prevalence); the qualitative panel shows an all-crater column. It learned the dataset's dominant base rate, not crater shape. This is the single most important finding and it directly explains the weak numbers everyone reported.
@@ -102,7 +114,7 @@ This is the headline of the whole comparison: **on the only class with real sign
 ## 7. Limitations (be honest about these)
 
 - The shared metric is **pixel coverage of the crater class**; it structurally favours area-covering methods (semantic/box-fill) over instance methods. The count metric and MCC partly offset this, but no single number is perfectly fair across task types.
-- **YOLO's classes are uninterpretable** (`class0…class6`, and it only ever predicts `class0`); all its boxes are treated as crater. If its training labels were not crater, its column is mislabelled — needs confirming with Alireza's real label map.
+- **YOLO's label map — RESOLVED (2 Jul).** The committed `preprocessing.ipynb` generates boxes with `class_id` = mask channel index, so in the 7-class `yolo_dataset` **`class0` = `impact_crater`**: the crater comparison's treatment of run-1 boxes is correct, not an assumption. The later runs (train-2…5) used `yolo_dataset_no_class0` — crater channel dropped, remaining channels re-indexed 0–5 — so *their* `class1` = `wrinkle_ridge`; train-5's confusion matrix shows `class1` is the only class it detects, and its positive ridge MCC (§5) validates the re-indexing empirically. One residual fragility: the harness picks weights via `sorted(glob("train*/weights/best.pt"))[-1]`, which selects the 7-class `train/` run only because ASCII `-` sorts before `/` — pin the path explicitly if more runs are added.
 - Mask R-CNN GT "count" via connected components on a dense semantic mask is noisy; count MAE should be read as indicative, not definitive.
 - **Operating-point sensitivity:** MCC/F1 depend on the threshold τ. Each regime is now calibrated on its *own* disjoint calib set (τ shown per row); rankings and the regime flip are robust, but absolute values shift with τ — always report it.
 - Numbers are on **286 held-out test tiles** (94 sparse / 192 dense; 191 calibration tiles total) for crater, and 314 test / 210 calib ridge-bearing tiles for ridge. Aggregates are stable; within the dense regime the 40–70 % band is undersampled (n≈22, the noisy mid-density dip in `fig_regime.png`). Widen the caps for final-manuscript precision.
@@ -120,6 +132,8 @@ This is the headline of the whole comparison: **on the only class with real sign
 ```bash
 # wrinkle-ridge comparison — the class with real signal (writes ridge_results.csv + fig_ridge_*.png)
 KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/ridge_comparison.py
+# south-pole Table 8 vs Table 12 reconciliation (writes giuseppe_preproc_check.csv)
+KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/giuseppe_preproc_check.py
 # report-grade per-regime crater analysis (writes regime_*.csv + fig_regime.png)
 KMP_DUPLICATE_LIB_OK=TRUE python Moon-Recognition/comparison/regime_analysis.py
 # single-band crater views (optional)
