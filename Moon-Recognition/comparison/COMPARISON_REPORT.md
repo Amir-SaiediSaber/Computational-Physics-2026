@@ -8,7 +8,7 @@ The group has four crater-finding methods, but they output different things:
 
 | Method | Author | Task type | Native output |
 |---|---|---|---|
-| U-Net | (yours) | semantic segmentation | per-pixel class probabilities |
+| U-Net | Giancarlo | semantic segmentation | per-pixel class probabilities |
 | Mask R-CNN | Amir | instance segmentation | per-instance box + mask + score |
 | YOLOv8 | Alireza | object detection | per-object box + score |
 | Classical | *(newly implemented here)* | thresholding + morphology | binary mask + components |
@@ -17,7 +17,7 @@ You cannot compare an mAP against a pixel-IoU against a thresholded mask. So the
 
 ## 2. Shared protocol
 
-- **Data & split:** the leakage-free **spatial** train/val split (`spatial_train_val_split`, seed=42) on the Marius Hills tiles — the same split your report uses. Evaluation is on held-out validation tiles only.
+- **Data & split:** the leakage-free **spatial** train/val split (`spatial_train_val_split`, seed=42) on the Marius Hills tiles — the same split the U-Net study uses. Evaluation is on held-out validation tiles only.
 - **Common prediction:** every method is reduced to a **binary impact-crater pixel mask** (256×256):
   - U-Net → crater-channel probability, thresholded;
   - Mask R-CNN → union of crater-class instance masks with score ≥ τ;
@@ -93,7 +93,7 @@ This is the headline of the whole comparison: **on the only class with real sign
 
 ## 5b. South-pole reconciliation — why the manuscript's two tables disagree (SOLVED)
 
-The June manuscript contained two contradicting south-pole result sets: the U-Net section's Table 8 (crater avg-max-prob 0.86, other classes near zero) and the duplicate section's Table 12 (ALL seven classes ≈262,144 detections — every pixel — avg-max-prob 0.48–0.54). The professor flagged this incoherence. `giuseppe_preproc_check.py` tests the two candidate mechanisms on the same south-pole tiles (8 tiles; per-tile max prob averaged; fraction of pixels above the workflow's own 0.1 display threshold):
+The June manuscript contained two contradicting south-pole result sets: the U-Net section's Table 8 (crater avg-max-prob 0.86, other classes near zero) and the duplicate section's Table 12 (ALL seven classes ≈262,144 detections — every pixel — avg-max-prob 0.48–0.54). Both cannot describe the same trained model. `giuseppe_preproc_check.py` tests the two candidate mechanisms on the same south-pole tiles (8 tiles; per-tile max prob averaged; fraction of pixels above the workflow's own 0.1 display threshold):
 
 | Configuration | crater max-prob | other 6 classes max-prob | pixels > 0.1 |
 |---|---|---|---|
@@ -101,7 +101,7 @@ The June manuscript contained two contradicting south-pole result sets: the U-Ne
 | trained weights + the duplicate workflow's OpenCV preprocessing | 0.832 | 0.00–0.06 | crater only |
 | **random weights (pre-fix loader behaviour)** | **0.485** | **0.48–0.54** | **100 % — every class** |
 
-Only the third row reproduces Table 12's signature. **Table 12 was produced by the checkpoint-loading bug**: the pre-fix `Predictor` loaded `best_trained.pth` with `strict=False` against legacy `block.*` key names, silently matched zero conv layers, and ran inference on randomly initialised weights — sigmoid of random logits ≈ 0.5 everywhere, so every pixel of every class clears a 0.1 threshold. The workflow's OpenCV-vs-skimage preprocessing mismatch (CLAHE clipLimit 2.0/8×8 grid vs `equalize_adapthist` 0.03; max-normalised Sobel vs `filters.sobel`) is real and measurably degrades the crater response (0.996 → 0.832), but it does NOT produce the uniform-0.5 pattern. For the retake report: drop Table 12, keep one south-pole section, and cite the loader fix (`inference/predictor.py`) — the contradiction has a demonstrated root cause, not a modelling disagreement.
+Only the third row reproduces Table 12's signature. **Table 12 was produced by the checkpoint-loading bug**: the pre-fix `Predictor` loaded `best_trained.pth` with `strict=False` against legacy `block.*` key names, silently matched zero conv layers, and ran inference on randomly initialised weights — sigmoid of random logits ≈ 0.5 everywhere, so every pixel of every class clears a 0.1 threshold. The workflow's OpenCV-vs-skimage preprocessing mismatch (CLAHE clipLimit 2.0/8×8 grid vs `equalize_adapthist` 0.03; max-normalised Sobel vs `filters.sobel`) is real and measurably degrades the crater response (0.996 → 0.832), but it does NOT produce the uniform-0.5 pattern. For the final manuscript: drop Table 12, keep one south-pole section, and cite the loader fix (`inference/predictor.py`) — the contradiction has a demonstrated root cause, not a modelling disagreement.
 
 ## 6. What we actually learn
 
@@ -123,11 +123,11 @@ Only the third row reproduces Table 12's signature. **Table 12 was produced by t
 - **Architecture-matching footgun (resolved here, but a group reproducibility risk):** the U-Net checkpoints do not record `use_residual` in a way the loader auto-applies. The crater checkpoint (`best_trained.pth`) is non-residual; the ridge/spatial checkpoint (`noaug_w32_t10000_e30.pt`) is the residual `+both` config. Loading a residual checkpoint into the default non-residual `SmallUNet` runs without error but silently scrambles the forward pass (ridge AP collapses 0.38→0.03). The loader's "unexpected keys" warning flags it — *heed it*. Each checkpoint must be loaded with the architecture it was trained with.
 - The classical ridge baseline is a single Sato filter; a stronger classical pipeline (directional morphology, Frangi, tuned thresholds) might do better, though ridges' low contrast makes a large gain unlikely.
 
-## 8. Implications for the 9 July retake
+## 8. Implications for the final report
 
-1. The comparison framework here **is** the "organic comparison" the professor asked for: one split, one reduction, one metric set, a trivial baseline to calibrate claims, and per-class/per-regime breakdowns.
+1. The comparison framework here gives the report a single organic spine: one split, one reduction, one metric set, a trivial baseline to calibrate claims, and per-class/per-regime breakdowns.
 2. **Lead with MCC / skill-over-baseline, not F1/IoU** — otherwise the report repeats the base-rate mistake.
-3. **Structure the comparison by class.** Crater = saturated → nobody beats base rate (a finding, not a failure). `wrinkle_ridge` = real signal → U-Net (MCC 0.45) > Mask R-CNN (0.37) ≫ YOLO train-5 (0.08) > classical/baseline, at a fraction of Mask R-CNN's cost. This is the defensible head-to-head — now genuinely four-way, one method per teammate plus the classical anchor — and it *vindicates* the U-Net rather than apologising for its crater numbers.
+3. **Structure the comparison by class.** Crater = saturated → nobody beats base rate (a finding, not a failure). `wrinkle_ridge` = real signal → U-Net (MCC 0.45) > Mask R-CNN (0.37) ≫ YOLO train-5 (0.08) > classical/baseline, at a fraction of Mask R-CNN's cost. This is the informative head-to-head — genuinely four-way, one learned method per author plus the classical anchor — and it shows the U-Net's real capability, which the saturated crater metrics obscure.
 4. There is now a real **classical baseline** (crater: morphology; ridge: Sato) to anchor the comparison — and the learned models clearly beat it where it matters.
 
 ## 9. Reproduce
