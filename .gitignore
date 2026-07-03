@@ -23,3 +23,8 @@ report/*.pdf
 report/*.synctex.gz
 report/*.fdb_latexmk
 report/*.fls
+# YOLO training artifacts (keep local, attach to Release instead)
+*.pt
+*.onnx
+Moon-Recognition/yolo/YOLO/runs/**/weights/
+catboost_info/
