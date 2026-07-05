@@ -15,8 +15,24 @@ A step-by-step tutorial notebook showing the training pipeline. It loads the cus
 ### `preprocessing.ipynb`
 Data preparation notebook. It provides `mask_to_yolo_boxes_multi()` which converts binary segmentation masks into YOLO-format bounding boxes via connected-component labeling. The notebook then processes `.npz` files (3-channel images + 7-class masks), extracts all bounding boxes into a CSV, splits into train/val (80/20), converts to PNG images with YOLO `.txt` labels, and generates a `data.yaml` config file for Ultralytics training.
 
-### `training.ipynb`
+### `run.py`
 The actual training notebook using the Ultralytics YOLOv8 library. It loads a pretrained `yolov8n.pt` checkpoint, adapts it for 7 classes, and trains for 100 epochs on the dataset produced by `preprocessing.ipynb`. Full training logs are shown, including per-epoch losses (box, cls, dfl) and validation metrics (Precision, Recall, mAP50, mAP50-95).
+
+### `predict folders`
+There are simple script codes to predict the lunar features of south pole of the moon.
+
+### `SouthPole.ipynb`
+extracting and analysing the prediction of the features over the south pole of the moon.
+
+### `make_image.ipynb`
+The script code to convert the mosaic images of moon to the large scale of all lunar surface of moon.
+
+### `ExtractInfo.ipynb`
+This script code use the 2D FFT and SVD to validate the yolo prediction of lunar surface.
+
+### `lunar_surface.pdf`
+report all I did for using and justifying the yolo models to detect the features of lunar surface.
+
 
 ![Training Results](training.jpg)
 
