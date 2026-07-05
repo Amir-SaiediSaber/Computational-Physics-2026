@@ -36,8 +36,4 @@ report all I did for using and justifying the yolo models to detect the features
 
 ![Training Results](training.jpg)
 
-## Pipeline
 
-1. `preprocessing.ipynb` converts raw `.npz` mask data into a YOLO-format dataset (images + labels + `data.yaml`)
-2. `HowTotrain.ipynb` demonstrates a minimal training loop (conceptual walkthrough)
-3. `training.ipynb` runs the full 100-epoch training using Ultralytics YOLOv8
