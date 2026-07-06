@@ -190,10 +190,7 @@ The `predictions/` folder contains 500 saved validation prediction files in `.np
 - The model has useful mask quality on matched objects, but the detection branch has low recall.
 - GPU training and cleaner instance labels would likely improve detection performance.
 
-## Related Folder
 
-The `lunar_segmentation/` folder contains additional semantic-segmentation utilities and a separate README. That folder is useful for U-Net-style semantic segmentation experiments, while `notebooks/amir_rcnn.ipynb` is the main Mask R-CNN instance-segmentation workflow for this branch.
-=======
 # Computational Physics 2026 — Group Project
 
 Two recognition tasks tackled with several methods each, one branch per student,
