@@ -1,0 +1,13 @@
+\section{Classical baseline: thresholding and morphology}
+\label{sec:classical}
+
+Before any learned method, we establish what classical image processing achieves on the same protocol. The baseline serves two purposes: it anchors the comparison (a deep model is only interesting if it beats interpretable, millisecond-scale processing), and it exposes how much of the task is solvable from local contrast alone.
+
+\paragraph{Crater detector.}
+Craters appear as locally dark depressions with bright rims under the fixed WAC illumination. The detector normalises each tile, applies adaptive (local-mean) thresholding to isolate dark regions, and cleans the result with morphological opening and closing (disk kernels), followed by removal of components smaller than a minimum area. The output is a binary crater mask directly comparable to the ground-truth channel. The pipeline has five interpretable parameters (threshold offset, window size, two kernel radii, minimum area), tuned on the calibration subset of the spatial validation split only.
+
+\paragraph{Ridge detector.}
+Wrinkle ridges are curvilinear, so the crater recipe does not transfer. The ridge baseline uses the Sato vesselness filter (eigenvalues of the Hessian at multiple scales), which responds to elongated bright structures, followed by the same morphological cleaning and a threshold calibrated as above.
+
+\paragraph{Cost and role.}
+The classical baseline runs at $\sim$1\,ms per tile on a single CPU core --- three orders of magnitude cheaper than Mask R-CNN --- and every decision it makes can be inspected. Its scores in Sect.~\ref{sec:comparison} define the floor that justifies (or fails to justify) the learned methods class by class.

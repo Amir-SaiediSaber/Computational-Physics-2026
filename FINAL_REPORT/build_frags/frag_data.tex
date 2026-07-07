@@ -1,0 +1,93 @@
+\section{Data and shared evaluation protocol}
+\label{sec:mr_dataset}
+
+All four methods are trained and compared on the same data product, described once here together with the evaluation protocol that every cross-method number in this paper adheres to.
+
+\subsection{Dataset}
+
+\paragraph{Imagery.}
+Training data consists of Wide Angle Camera (WAC) grayscale tiles downloaded from the LROC archive, covering the \textit{Marius Hills} volcanic region on the Oceanus Procellarum --- a site of particular scientific interest due to its high density of pit skylights, wrinkle ridges, and rilles.
+
+\paragraph{Target classes.}
+Each tile carries seven binary semantic mask channels:
+\begin{enumerate}
+    \item \texttt{impact\_crater} --- circular depressions formed by hypervelocity impacts,
+    \item \texttt{pit\_skylight} --- openings into subsurface lava tubes,
+    \item \texttt{wrinkle\_ridge} --- compressional tectonic folds in mare basalts,
+    \item \texttt{lobate\_scarp} --- cliff-like fault scarps formed by global contraction,
+    \item \texttt{irregular\_mare\_patch} --- inhomogeneous mare volcanic units,
+    \item \texttt{apollo\_site} --- Apollo mission landing sites,
+    \item \texttt{candidate\_rille} --- linear depressions of volcanic or tectonic origin.
+\end{enumerate}
+Because multiple classes can coexist in a single pixel (e.g.\ a pit on the rim of a crater), the labels are independent binary channels rather than a single-label partition. Each formulation consumes them differently: the segmentation networks use the pixel masks directly, while the detection methods convert connected components into object instances (Sects.~\ref{sec:maskrcnn} and~\ref{sec:yolo}).
+
+\paragraph{Tiling.}
+The raw raster is divided into overlapping training patches using a sliding-window tiler:
+\begin{itemize}
+    \item Tile size: $256 \times 256$ pixels,
+    \item Stride: $128$ pixels (50\% overlap between adjacent tiles),
+    \item Tiles with no labelled features are kept with probability $p=0.1$ to maintain background examples,
+    \item Total tiles produced: 15{,}931.
+\end{itemize}
+
+\paragraph{Labels.}
+Ground-truth annotations are sourced from the LROC feature catalogue (shapefiles and CSV), rasterised onto the tile grid as binary masks. To account for the point-like or line-like nature of some classes, morphological dilation is applied per class after rasterisation:
+\begin{itemize}
+    \item \texttt{pit\_skylight}, \texttt{apollo\_site}, \texttt{irregular\_mare\_patch}: disk kernel of radius 5,
+    \item \texttt{wrinkle\_ridge}, \texttt{lobate\_scarp}: disk kernel of radius 3 (linear features),
+    \item \texttt{candidate\_rille}: disk kernel of radius 2,
+    \item \texttt{impact\_crater}: no dilation (already area features).
+\end{itemize}
+
+\paragraph{Label prevalence and channel saturation.}
+Table~\ref{tab:prevalence} reports the exact fraction of positive pixels per class, computed over all 15{,}931 tiles. The imbalance is extreme \emph{in both directions}: the \texttt{impact\_crater} channel covers 82.1\% of all pixels --- half of the tiles are \emph{entirely} positive --- while the five rarest classes have prevalences below $1.4\times10^{-4}$. The crater channel therefore behaves closer to a coverage-like layer than to a sparse target feature, a possibility explicitly flagged in the course material. This has a direct consequence for interpretation: the Average Precision of an uninformative predictor equals the class prevalence, so per-class AP values must be read against the baselines in Table~\ref{tab:prevalence} rather than against zero. This single property of the labels shapes the entire comparison of Sect.~\ref{sec:comparison}.
+
+\begin{table}[htbp]
+\centering
+\caption{Per-class positive-pixel prevalence over the full dataset (15{,}931 tiles, $1.04\times10^9$ pixels per channel). The prevalence is also the AP of an uninformative (chance-level) predictor for that class.}
+\label{tab:prevalence}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lrr}
+\toprule
+Class & Prevalence & Tiles fully covered \\
+\midrule
+\texttt{impact\_crater}        & $8.21\times10^{-1}$ & 50.7\% \\
+\texttt{wrinkle\_ridge}        & $6.38\times10^{-3}$ & 0 \\
+\texttt{lobate\_scarp}         & $1.34\times10^{-4}$ & 0 \\
+\texttt{pit\_skylight}         & $4.2\times10^{-5}$  & 0 \\
+\texttt{irregular\_mare\_patch} & $2.0\times10^{-5}$  & 0 \\
+\texttt{apollo\_site}          & $1.5\times10^{-5}$  & 0 \\
+\texttt{candidate\_rille}      & $1.0\times10^{-5}$  & 0 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\subsection{Train/validation splitting: the leakage problem}
+\label{sec:splits}
+
+Because adjacent tiles overlap by 50\%, splitting \emph{tiles} at random does not split \emph{pixels}: a direct measurement on the tile index shows that every validation tile of a random 80/20 split overlaps at least one training tile. Validation scores obtained this way partially reward memorisation of pixels seen during training, and they specifically confound any comparison between a memorisation-prone configuration and a regularised one.
+
+Two protocols therefore appear in this paper, and every table states which one it uses:
+\begin{itemize}
+    \item \textbf{Random tile split} (80/20, fixed seed): the protocol used by the historical single-method experiments. Comparisons \emph{within} this protocol, between configurations trained and evaluated on the identical split, remain internally valid; absolute scores are optimistic.
+    \item \textbf{Spatial block split} (the reference protocol): contiguous $1024$-px spatial blocks are assigned to validation, and every training tile whose footprint intersects a validation tile is discarded, so train and validation are strictly disjoint in pixel space (on the full index: 11{,}289 train / 3{,}248 validation tiles, 1{,}394 boundary tiles dropped, zero pixel overlap, verified by an independent assertion). All cross-method numbers in Sect.~\ref{sec:comparison} use this split with seed 42.
+\end{itemize}
+Sect.~\ref{sec:split_study} quantifies the difference directly, by retraining identical detectors under both protocols.
+
+\subsection{Shared metrics}
+\label{sec:metrics_protocol}
+
+For the cross-method comparison every model is reduced to the same output format --- a per-class binary mask on each validation tile --- so that segmentation networks, detectors (boxes filled as mask regions), and the classical baseline are scored identically. Metrics are computed per class:
+
+\begin{itemize}
+    \item \textbf{Pixel precision, recall, F1, IoU} at a per-method operating threshold $\tau$ calibrated on a held-out calibration subset of the validation split (each method gets its own optimal $\tau$, so no method is penalised by a foreign operating point);
+    \item \textbf{Matthews correlation coefficient (MCC)}, the primary ranking metric. Unlike F1 and IoU, MCC is invariant to the positive-class base rate: on the 82\%-prevalence crater channel a predict-everything baseline attains F1 $=0.90$ and IoU $=0.82$ but MCC $=0$ by construction. Wherever F1-style metrics would reward the base rate, rankings in this paper are read from MCC;
+    \item \textbf{Object count error} (mean absolute error of connected-component counts) as an instance-level diagnostic;
+    \item \textbf{Inference cost} in milliseconds per tile on identical hardware.
+\end{itemize}
+
+For threshold-free evaluation of the segmentation networks we additionally report Average Precision (AP), always against the prevalence baselines of Table~\ref{tab:prevalence}.
+
+\paragraph{South pole.}
+The lunar south pole tiles used in Sect.~\ref{sec:southpole} have no feature catalogue and hence no ground truth; south-pole outputs are treated as transfer \emph{diagnostics} (prediction-confidence statistics), never as accuracy metrics.
