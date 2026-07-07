@@ -97,7 +97,13 @@ An early run of this pipeline, however, produced results that contradicted Table
 \label{fig:mega_grid_3x2}
 \end{figure*}
 
-\subsection{Object-detection transfer}
+\subsection{Detection-level transfer: YOLOv8 and Mask R-CNN}
 \label{sec:sp_yolo}
 
-The YOLOv8 ensemble of Sect.~\ref{sec:yolo_ensemble} was likewise deployed on the south pole tiles. At a confidence threshold of $\geq 0.5$, the predicted feature population is overwhelmingly craters (98.0\% of detections), followed by wrinkle ridges (1.4\%) and lobate scarps (0.6\%) --- a plausible composition for heavily cratered highland terrain, and consistent with the tectonic (contraction-driven) origin of the ridge and scarp detections. With no ground truth these proportions cannot be validated; they are reported as the detection-level counterpart of the segmentation diagnostics above, and the agreement between the two independent formulations (craters dominant, linear tectonic features rare but present) is itself the most meaningful check available in an unlabelled region.
+The two detection formulations were likewise deployed on the same tiles, and their disagreement is as instructive as their agreement.
+
+The YOLOv8 ensemble of Sect.~\ref{sec:yolo_ensemble}, at a confidence threshold of $\geq 0.5$, predicts a feature population that is overwhelmingly craters (98.0\% of detections), followed by wrinkle ridges (1.4\%) and lobate scarps (0.6\%) --- a plausible composition for heavily cratered highland terrain, consistent with the crater-dominant segmentation diagnostics above and with the tectonic (contraction-driven) origin of the ridge and scarp detections.
+
+The Mask R-CNN of Sect.~\ref{sec:maskrcnn}, evaluated at its own operating threshold (0.5) on all 3\,639 tiles, tells a different story: it returns only 52 instances in the entire region, \emph{all} classified as wrinkle ridges, and \emph{zero} craters. Craters emerge only when the confidence threshold is lowered --- 188 detections on 78 tiles at $\tau = 0.2$, 8\,176 at $\tau = 0.1$, and 104\,871 at $\tau = 0.05$. This is the domain-shift signature of a detector whose crater recall was already its weak point in-distribution (Sect.~\ref{sec:maskrcnn}): on unfamiliar terrain its crater confidence collapses below the nominal operating point while its ridge head remains assertive. The lesson mirrors the threshold-calibration requirement of the shared protocol (Sect.~\ref{sec:metrics_protocol}), now in a regime where no calibration set exists.
+
+With no ground truth, none of these compositions can be validated individually. Read together, the three formulations triangulate what a single pipeline cannot: the segmentation diagnostics and YOLOv8 agree that the region is crater-dominated with rare linear tectonic features, while Mask R-CNN's threshold sweep shows how strongly any such composition depends on confidence calibration under domain shift. In an unlabelled region, cross-method comparison is not just the best available check --- it is also the only way to see which conclusions are threshold-robust and which are not.
