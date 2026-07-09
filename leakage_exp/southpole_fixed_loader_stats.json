@@ -1,0 +1,30 @@
+{
+ "impact_crater": {
+  "avg_max_prob": 0.9988807439804077,
+  "global_max": 0.9999643564224243
+ },
+ "pit_skylight": {
+  "avg_max_prob": 0.11103502660989761,
+  "global_max": 0.16195566952228546
+ },
+ "wrinkle_ridge": {
+  "avg_max_prob": 0.0317719541490078,
+  "global_max": 0.9850435256958008
+ },
+ "lobate_scarp": {
+  "avg_max_prob": 0.19104190170764923,
+  "global_max": 0.2920650541782379
+ },
+ "irregular_mare_patch": {
+  "avg_max_prob": 0.09407161921262741,
+  "global_max": 0.19012382626533508
+ },
+ "apollo_site": {
+  "avg_max_prob": 0.08687550574541092,
+  "global_max": 0.15859587490558624
+ },
+ "candidate_rille": {
+  "avg_max_prob": 0.029626747593283653,
+  "global_max": 0.3961431384086609
+ }
+}

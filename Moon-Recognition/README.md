@@ -190,55 +190,46 @@ The `predictions/` folder contains 500 saved validation prediction files in `.np
 - The model has useful mask quality on matched objects, but the detection branch has low recall.
 - GPU training and cleaner instance labels would likely improve detection performance.
 
-## Related Folder
 
-The `lunar_segmentation/` folder contains additional semantic-segmentation utilities and a separate README. That folder is useful for U-Net-style semantic segmentation experiments, while `notebooks/amir_rcnn.ipynb` is the main Mask R-CNN instance-segmentation workflow for this branch.
 
-# Moon Recognition (MR) — U-Net lunar feature segmentation
 
-Multi-label pixel-wise segmentation of seven lunar surface feature classes
-from LRO WAC tiles (Marius Hills, 15,931 supplied 256×256 tiles), with a
-configurable SmallUNet and a full ablation campaign. Report section:
-`report/moon_recognition.tex`.
+# YOLOv8 Moon Recognition - Code Overview
 
-## Layout
+This folder contains the core implementation files for training a YOLOv8-based object detection model for moon crater/feature recognition.
 
-```
-Moon-Recognition/
-├── notebooks/
-│   ├── architecture_comparison.ipynb       Studies 1–3: loss / residual / dropout /
-│   │                                       width / augmentation ablations
-│   └── south_pole_complete_workflow.ipynb  out-of-distribution inference (3,639 tiles)
-├── lunar_segmentation/                     package, configs, scripts (see its README)
-└── IMPROVEMENTS.md                         audited fixes: issue → fix → justification
-```
+## Files
 
-Data lives in the repo-level `data/MR/` (gitignored): `tiles/` + `index.csv`
-(supplied dataset), `weights/`, `results/` (checkpoints, curves, logs).
+### `model.py`
+A from-scratch PyTorch implementation of the YOLOv8n architecture. It defines all building blocks: `Conv` (conv + BN + SiLU), `Bottleneck`, `C2f` (CSP bottleneck), `SPPF` (spatial pyramid pooling), `Concat`, `DFL` (distribution focal loss), and `Detect` (detection head). These are assembled into `DetectionModel`, a full YOLOv8n model with 3.01M parameters.
 
-## Reproducing the results
+![YOLOv8 Structure](YOLOv8_structure.jpg)
 
-1. **Environment**: `pip install -r lunar_segmentation/requirements.txt`
-   (conda env `stellar` on the development machine).
-2. **Training / ablations**: run `notebooks/architecture_comparison.ipynb`.
-   Top cell toggles: `MAX_TILES=500, MAX_EPOCHS=3` (smoke test) →
-   `MAX_TILES=None, MAX_EPOCHS=30` (definitive CloudVeneto T4 protocol,
-   see `lunar_segmentation/configs/unet_config.yaml`). The definitive runs
-   (~24 h total) produced `data/MR/results/cloudveneto_train.log` and the
-   checkpoints used by the report.
-3. **Qualitative figures** (report Sec. "Qualitative Evaluation"):
-   `python lunar_segmentation/scripts/qualitative_eval.py` (minutes on MPS;
-   needs the full-run checkpoints in `data/MR/results/checkpoints/`).
-4. **South-pole inference**: `notebooks/south_pole_complete_workflow.ipynb`.
+### `HowTotrain.ipynb`
+A step-by-step tutorial notebook showing the training pipeline. It loads the custom `DetectionModel`, runs inference on one example image from the dataset, computes IoU to find the best-matching prediction, defines a simple custom loss (MSE for box coordinates, BCE for class probabilities), and trains for 2 epochs on a single example.
 
-## Known caveats (tracked in IMPROVEMENTS.md)
+### `preprocessing.ipynb`
+Data preparation notebook. It provides `mask_to_yolo_boxes_multi()` which converts binary segmentation masks into YOLO-format bounding boxes via connected-component labeling. The notebook then processes `.npz` files (3-channel images + 7-class masks), extracts all bounding boxes into a CSV, splits into train/val (80/20), converts to PNG images with YOLO `.txt` labels, and generates a `data.yaml` config file for Ultralytics training.
 
-- The published ablations used a **random** tile split; tiles overlap 50%,
-  so validation leaks (100% of val tiles overlap a train tile — measured).
-  A leakage-free spatial block split is implemented in
-  `lunar_segmentation/lunar_segmentation/data/splits.py`; Study 3
-  (augmentation) must be re-validated with it (≈4–7 h on the T4).
-- The `impact_crater` mask channel covers 82.1% of all pixels (near-coverage
-  layer): crater AP ≈ 0.95 must be read against its 0.821 chance baseline.
-  The strongest genuine result is `wrinkle_ridge` (AP 0.558 ≈ 90× chance).
-main
+### `run.py`
+The actual training notebook using the Ultralytics YOLOv8 library. It loads a pretrained `yolov8n.pt` checkpoint, adapts it for 7 classes, and trains for 100 epochs on the dataset produced by `preprocessing.ipynb`. Full training logs are shown, including per-epoch losses (box, cls, dfl) and validation metrics (Precision, Recall, mAP50, mAP50-95).
+
+### `predict folders`
+There are simple script codes to predict the lunar features of south pole of the moon.
+
+### `SouthPole.ipynb`
+extracting and analysing the prediction of the features over the south pole of the moon.
+
+### `make_image.ipynb`
+The script code to convert the mosaic images of moon to the large scale of all lunar surface of moon.
+
+### `ExtractInfo.ipynb`
+This script code use the 2D FFT and SVD to validate the yolo prediction of lunar surface.
+
+### `lunar_surface.pdf`
+report all I did for using and justifying the yolo models to detect the features of lunar surface.
+
+
+![Training Results](training.jpg)
+
+
+

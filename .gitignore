@@ -28,3 +28,6 @@ report/*.fls
 *.onnx
 Moon-Recognition/yolo/YOLO/runs/**/weights/
 catboost_info/
+
+# leakage_exp: keep the six small study checkpoints despite the global *.pt rule
+!leakage_exp/runs/*/weights/best.pt
