@@ -579,7 +579,7 @@ with $\gamma=2$ and $\alpha=0.25$. The Dice term additionally uses per-class wei
 \subsection{Training Protocol}
 \label{sec:mr_training}
 
-All definitive experiments were run on a \textbf{NVIDIA Tesla T4} (16 GB VRAM) via the CloudVeneto HPC facility, using the full training dataset of 15{,}931 tiles for 30 epochs. The local MPS (Apple Silicon) runs at 4{,}000 tiles / 20 epochs served as rapid prototyping before the full runs.
+Unless noted otherwise, the definitive experiments were run on a \textbf{NVIDIA Tesla T4} (16 GB VRAM) via the CloudVeneto HPC facility, using the full training dataset of 15{,}931 tiles for 30 epochs. The local MPS (Apple Silicon) runs at 4{,}000 tiles / 20 epochs served as rapid prototyping before the full runs.
 
 \begin{itemize}
     \item Batch size: 16 (T4) / 8 (MPS),
@@ -1469,52 +1469,50 @@ Taken together, the study argues that for planetary datasets with extreme preval
 
 \begin{thebibliography}{}
 
-   \bibitem[He et al.(2017)]{he2017maskrcnn} He, K., Gkioxari, G., Doll\'ar, P., \& Girshick, R. 2017,
-       in Proc.\ IEEE Int.\ Conf.\ on Computer Vision (ICCV), 2961
-
-   \bibitem[NASA/JPL(2010)]{pia12954} NASA/JPL and University of Arizona 2010,
-       PIA12954: A Hole in the Moon (Marius Hills Pit), NASA Photojournal
-
-   \bibitem[NASA/GSFC(2011)]{pia13523} NASA/GSFC and Arizona State University 2011,
-       PIA13523: Lunar South Polar Region, NASA Photojournal
-
-   \bibitem[NASA(2023)]{nasa2023southpole} NASA 2023,
-       Artemis and the Lunar South Pole: ShadowCam Imaging of Permanently Shadowed Regions
-
-   \bibitem[USGS(2024)]{lroc_usgs} USGS Astrogeology Science Center and Arizona State University 2024,
-       Lunar Reconnaissance Orbiter Camera (LROC) Instrument Overview
-
-   \bibitem[LCP(2026)]{mariusdata} Laboratory of Computational Physics, UniPD 2026,
-       Marius Hills lunar feature dataset: pre-processed NPZ tiles
-
-   \bibitem[He et al.(2016)]{he2016resnet} He, K., Zhang, X., Ren, S., \& Sun, J. 2016,
+\bibitem[He et al.(2016)]{he2016resnet} He, K., Zhang, X., Ren, S., \& Sun, J. 2016,
        in Proc.\ IEEE Conf.\ on Computer Vision and Pattern Recognition (CVPR), 770
 
-   \bibitem[Lin et al.(2017)]{lin2017fpn} Lin, T.-Y., Doll\'ar, P., Girshick, R., He, K., Hariharan, B., \& Belongie, S. 2017,
-       in Proc.\ IEEE Conf.\ on Computer Vision and Pattern Recognition (CVPR), 2117
+\bibitem[He et al.(2017)]{he2017maskrcnn} He, K., Gkioxari, G., Doll\'ar, P., \& Girshick, R. 2017,
+       in Proc.\ IEEE Int.\ Conf.\ on Computer Vision (ICCV), 2961
 
-   \bibitem[Loshchilov \& Hutter(2019)]{loshchilov2019adamw} Loshchilov, I., \& Hutter, F. 2019,
-       in Int.\ Conf.\ on Learning Representations (ICLR)
-
-   \bibitem[Ronneberger et al.(2015)]{ronneberger2015unet} Ronneberger, O., Fischer, P., \& Brox, T. 2015,
-       in MICCAI
-
-   \bibitem[Lin et al.(2017)]{lin2017focal} Lin, T.-Y., Goyal, P., Girshick, R., He, K., \& Doll\'ar, P. 2017,
-       in Proc.\ IEEE Int.\ Conf.\ on Computer Vision (ICCV)
-
-   \bibitem[Zingales(2026)]{zingales2026lecture} Zingales, T. 2026,
-       Moon Features Recognition (Lecture 3b), Computational Physics, University of Padova
-
-   \bibitem[Shorten \& Khoshgoftaar(2019)]{shorten2019augmentation} Shorten, C., \& Khoshgoftaar, T. M. 2019,
-       Journal of Big Data, 6, 60
-
-
-   \bibitem[Redmon et al.(2016)]{redmon2016yolo} Redmon, J., Divvala, S., Girshick, R., \& Farhadi, A. 2016,
-       in Proc.\ IEEE Conf.\ on Computer Vision and Pattern Recognition (CVPR), 779
-
-   \bibitem[Jocher et al.(2023)]{jocher2023yolov8} Jocher, G., Chaurasia, A., \& Qiu, J. 2023,
+\bibitem[Jocher et al.(2023)]{jocher2023yolov8} Jocher, G., Chaurasia, A., \& Qiu, J. 2023,
        Ultralytics YOLOv8, https://github.com/ultralytics/ultralytics
 
+\bibitem[LCP(2026)]{mariusdata} Laboratory of Computational Physics, UniPD 2026,
+       Marius Hills lunar feature dataset: pre-processed NPZ tiles
+
+\bibitem[Lin et al.(2017)]{lin2017fpn} Lin, T.-Y., Doll\'ar, P., Girshick, R., He, K., Hariharan, B., \& Belongie, S. 2017,
+       in Proc.\ IEEE Conf.\ on Computer Vision and Pattern Recognition (CVPR), 2117
+
+\bibitem[Lin et al.(2017)]{lin2017focal} Lin, T.-Y., Goyal, P., Girshick, R., He, K., \& Doll\'ar, P. 2017,
+       in Proc.\ IEEE Int.\ Conf.\ on Computer Vision (ICCV)
+
+\bibitem[Loshchilov \& Hutter(2019)]{loshchilov2019adamw} Loshchilov, I., \& Hutter, F. 2019,
+       in Int.\ Conf.\ on Learning Representations (ICLR)
+
+\bibitem[NASA(2023)]{nasa2023southpole} NASA 2023,
+       Artemis and the Lunar South Pole: ShadowCam Imaging of Permanently Shadowed Regions
+
+\bibitem[NASA/GSFC(2011)]{pia13523} NASA/GSFC and Arizona State University 2011,
+       PIA13523: Lunar South Polar Region, NASA Photojournal
+
+\bibitem[NASA/JPL(2010)]{pia12954} NASA/JPL and University of Arizona 2010,
+       PIA12954: A Hole in the Moon (Marius Hills Pit), NASA Photojournal
+
+\bibitem[Redmon et al.(2016)]{redmon2016yolo} Redmon, J., Divvala, S., Girshick, R., \& Farhadi, A. 2016,
+       in Proc.\ IEEE Conf.\ on Computer Vision and Pattern Recognition (CVPR), 779
+
+\bibitem[Ronneberger et al.(2015)]{ronneberger2015unet} Ronneberger, O., Fischer, P., \& Brox, T. 2015,
+       in MICCAI
+
+\bibitem[Shorten \& Khoshgoftaar(2019)]{shorten2019augmentation} Shorten, C., \& Khoshgoftaar, T. M. 2019,
+       Journal of Big Data, 6, 60
+
+\bibitem[USGS(2024)]{lroc_usgs} USGS Astrogeology Science Center and Arizona State University 2024,
+       Lunar Reconnaissance Orbiter Camera (LROC) Instrument Overview
+
+\bibitem[Zingales(2026)]{zingales2026lecture} Zingales, T. 2026,
+       Moon Features Recognition (Lecture 3b), Computational Physics, University of Padova
 
 \end{thebibliography}
 

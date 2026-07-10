@@ -1,5 +1,6 @@
 """Assemble the restructured aanda.tex from the original + new fragments."""
 import os
+import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -43,7 +44,13 @@ parts.append(
     "coexist in a single pixel (e.g.\\ a pit on the rim of a crater), the task "
     "is posed as independent binary classification per class rather than a "
     "single-label softmax problem.\n")
-parts.append(rng(445, 756))
+unet_body = rng(445, 756)
+# The spatial-split re-run (Sect. study 3) ran at 10k tiles on local hardware,
+# stated where it is reported; scope the T4 claim accordingly.
+unet_body = unet_body.replace(
+    "All definitive experiments were run on",
+    "Unless noted otherwise, the definitive experiments were run on")
+parts.append(unet_body)
 parts.append(rng(816, 873))
 # 6 YOLO section: new head, original body 888-1176, ensemble subsection, barrier
 parts.append(frag("frag_yolo_head.tex"))
@@ -61,11 +68,20 @@ parts.append(frag("frag_comparison.tex"))
 parts.append(frag("frag_southpole.tex"))
 # 9 Conclusions + acknowledgements (new)
 parts.append(frag("frag_conclusions.tex"))
-# Bibliography: original items + additions
+# Bibliography: original items + additions, sorted by author label then year
 parts.append("\\FloatBarrier")
+bib_src = rng(1469, 1507) + "\n" + frag("frag_bib_extra.tex")
+entries = ["\\bibitem" + chunk.strip() for chunk in bib_src.split("\\bibitem")[1:]]
+
+
+def bib_sort_key(entry):
+    m = re.match(r"\\bibitem\[([^(]*)\((\d{4})\)", entry)
+    return (m.group(1).strip().lower(), m.group(2)) if m else ("", "")
+
+
+entries.sort(key=bib_sort_key)
 parts.append("\\begin{thebibliography}{}")
-parts.append(rng(1469, 1507))
-parts.append(frag("frag_bib_extra.tex"))
+parts.append("\n\n".join(entries))
 parts.append("\\end{thebibliography}")
 parts.append("")
 parts.append("\\end{document}")
