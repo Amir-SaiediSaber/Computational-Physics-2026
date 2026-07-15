@@ -139,7 +139,7 @@ A semantic channel is not the same thing as a set of objects. Before training, e
 The backbone is a COCO-pretrained ResNet-50 with a Feature Pyramid Network \citep{he2016resnet,lin2017fpn}, lowest layers frozen and the top three trainable. Three changes adapt it to lunar tiles: anchors retuned to lunar scales (one size per FPN level, $(8,16,32,64,128)$\,px, aspect ratios $(0.5,1,2)$, preserving the pretrained RPN head shape); a deeper four-layer box head (1024 units, dropout 0.10); and a residual convolutional mask head (four residual blocks, 256 channels, GroupNorm) with transposed-convolution upsampling. The native 256\,px resolution is kept instead of torchvision's 800\,px rescaling. Optimisation uses AdamW \citep{loshchilov2019adamw} with discriminative learning rates (backbone and RPN at one tenth of the head rate of $2\times10^{-4}$), weight decay $10^{-4}$, one-epoch warm-up with cosine decay, and gradient clipping at 5.0, for 20 epochs at batch size 8. Because the only available hardware was a CPU (${\sim}$half a day per run), the loop was engineered to be crash-safe and resumable, checkpointing model, optimiser, and scheduler state every epoch.
 
 \paragraph{Results.}
-Table~\ref{tab:metrics} collects the validation metrics of the best checkpoint (epoch 8; validation loss turns upward after ${\sim}4$ epochs, indicating overfitting on the limited positives). The two halves of the network tell very different stories. The \emph{segmentation} branch works: whenever a detection is matched to a ground-truth object, the predicted mask overlaps it well (IoU 0.64, Dice 0.77). The \emph{detection} branch is where everything breaks down: mAP@0.5 sits near 1\%, and false negatives (7790) vastly outnumber true positives (461). The per-class breakdown shows that the comparatively common craters and ridges carry essentially all of the average precision, while the scientifically interesting pit/skylight class is barely detected and lobate scarps reach exactly zero --- too few examples to learn from.
+Table~\ref{tab:metrics} collects the validation metrics of the best checkpoint (epoch 8; validation loss turns upward after ${\sim}4$ epochs, indicating overfitting on the limited positives). The two halves of the network tell very different stories. The \emph{segmentation} branch works: whenever a detection is matched to a ground-truth object, the predicted mask overlaps it well (IoU 0.64, Dice 0.77). The \emph{detection} branch is where everything breaks down: mAP@0.5 sits near 1\%, and false negatives (7790) vastly outnumber true positives (461). The per-class breakdown shows that the comparatively common craters and ridges carry essentially all of the average precision, while the scientifically interesting pit/skylight class is barely detected and lobate scarps reach exactly zero --- too few examples to learn from. The training history and qualitative prediction panels are collected in Appendix~\ref{app:maskrcnn}.
 
 \begin{table}[htbp]
 \caption{Mask R-CNN validation metrics (best checkpoint, full held-out spatial band), with per-class AP@0.5.}
@@ -185,7 +185,7 @@ Two composite losses are compared: \emph{BCEDice} (binary cross-entropy plus sof
 \subsection{Ablation campaign}
 \label{sec:mr_augmentation}
 
-Three controlled studies were run in sequence; Table~\ref{tab:final_summary} collects the best result of each.
+Three controlled studies were run in sequence; Table~\ref{tab:final_summary} collects the best result of each, and Appendix~\ref{app:unet} the architecture details, loss definitions, full per-study tables, validation curves, and qualitative comparisons.
 
 \paragraph{Study 1 --- architecture.}
 Five cumulative configurations (BCEDice; FocalDice; +residual; +dropout $p=0.3$; +both) were compared on the full T4 protocol. Residual shortcuts consistently improve aggregate F1, IoU, and AP; dropout alone does not help, likely because sparse labels already regularise the network; the combination \textbf{+both} is best (mean F1 0.2076, mean AP 0.2004, ridge AP 0.453). Crater AP is uniformly high (0.939--0.951) across all configurations, but against the 0.821 prevalence baseline of Table~\ref{tab:prevalence} this is only a modest lift over chance: architecture matters primarily for rare, structurally subtle classes such as ridges, where AP ${\sim}0.45$ is ${\sim}70\times$ the 0.0064 chance level.
@@ -250,7 +250,7 @@ The definitive model is SmallUNet with $w=32$, FocalDice, residual shortcuts, bo
 The third learned formulation treats lunar features as objects to be localised with bounding boxes. YOLO \citep{redmon2016yolo} frames detection as a single regression pass --- box coordinates and class probabilities are predicted simultaneously in one forward pass, avoiding the region-proposal stage of two-stage detectors and making the method orders of magnitude faster. We use YOLOv8n \citep{jocher2023yolov8} (3.0M parameters, anchor-free decoupled head), COCO-pretrained and fine-tuned on the lunar tiles. Box targets are generated from the semantic mask channels by connected-component labelling, with per-class size gates discarding degenerate components (minimum side 5\,px; maximum side 100\,px for craters, 300\,px otherwise).
 
 \paragraph{Experiment 1: all seven classes.}
-The box-level class distribution is even more skewed than the pixel-level one: impact craters contribute 382{,}122 of 399{,}691 instances (95.5\%), wrinkle ridges 16{,}133 (4.0\%), and the remaining five classes below 0.2\% each, with all boxes small relative to the image (most spanning ${\sim}5\%$ of its side). Trained for 100 epochs on this dataset, the model converges stably (a transient loss spike near epoch 90 is the cosine-annealing restart) but fails to generalise beyond the dominant class: recall grows only to ${\sim}0.05$, concentrated on craters.
+The box-level class distribution is even more skewed than the pixel-level one: impact craters contribute 382{,}122 of 399{,}691 instances (95.5\%), wrinkle ridges 16{,}133 (4.0\%), and the remaining five classes below 0.2\% each, with all boxes small relative to the image (most spanning ${\sim}5\%$ of its side). Trained for 100 epochs on this dataset, the model converges stably (a transient loss spike near epoch 90 is the cosine-annealing restart) but fails to generalise beyond the dominant class: recall grows only to ${\sim}0.05$, concentrated on craters. Full label statistics and training diagnostics for both experiments are collected in Appendix~\ref{app:yolo}.
 
 \paragraph{Experiment 2: craters removed.}
 Excluding the impact-crater class leaves 17{,}486 instances dominated by wrinkle ridges (92.6\%). Training on this reduced six-class dataset is markedly more stable --- all losses decrease smoothly, training and validation remain closely aligned, and recall (${\sim}0.043$) is now spread across the six rare classes rather than concentrated on craters. Class imbalance, not model capacity, was the primary limiting factor of the first experiment; even a simple class-removal curation significantly improves convergence.
@@ -425,7 +425,7 @@ Accuracy is one axis; Table~\ref{tab:ridge} also reports cost. Mask R-CNN pays $
 As a transfer test, the trained pipelines are deployed on the lunar south pole --- a region of high scientific and operational interest that is geologically distinct from the volcanic Marius Hills training domain. South-pole imagery from the same LRO WAC source is tiled identically, producing 3\,639 tiles. No feature catalogue exists for this region, so everything in this section is a transfer \emph{diagnostic}, not an accuracy measurement (Sect.~\ref{sec:metrics_protocol}).
 
 \paragraph{Semantic segmentation transfer.}
-Each tile is preprocessed with the training-time CLAHE + Sobel pipeline and passed through the definitive SmallUNet checkpoint; Table~\ref{tab:south_pole_stats} reports the aggregated confidence statistics. The model assigns high crater probability across the entire region (average per-tile maximum 0.863) --- expected behaviour given the near-saturated crater layer learned in training, and not to be over-interpreted as precise crater delineation (Sect.~\ref{sec:comp_crater}). Two classes, \texttt{wrinkle\_ridge} and \texttt{candidate\_rille}, show very low average probabilities but anomalously high global maxima (1.000 and 0.480): rare but confident predictions on a few tiles rather than diffuse activation. The weak performance on rare classes reflects the combination of domain shift and the near-absence of supervision for those classes even in the training region.
+Each tile is preprocessed with the training-time CLAHE + Sobel pipeline and passed through the definitive SmallUNet checkpoint; Table~\ref{tab:south_pole_stats} reports the aggregated confidence statistics, and Appendix~\ref{app:southpole} the underlying per-class diagnostics. The model assigns high crater probability across the entire region (average per-tile maximum 0.863) --- expected behaviour given the near-saturated crater layer learned in training, and not to be over-interpreted as precise crater delineation (Sect.~\ref{sec:comp_crater}). Two classes, \texttt{wrinkle\_ridge} and \texttt{candidate\_rille}, show very low average probabilities but anomalously high global maxima (1.000 and 0.480): rare but confident predictions on a few tiles rather than diffuse activation. The weak performance on rare classes reflects the combination of domain shift and the near-absence of supervision for those classes even in the training region.
 
 \begin{table}[htbp]
 \centering
@@ -449,7 +449,7 @@ Class & Avg.\ Max.\ Prob. & Global Max & Status \\
 \end{table}
 
 \paragraph{A reproducibility lesson.}
-Survey-scale inference required a decoupled pipeline (streaming tiles through the network, serialising each probability cube to compressed \texttt{.npz} storage, aggregating statistics in a second pass). An early run of it, however, contradicted Table~\ref{tab:south_pole_stats}: \emph{every} class appeared with average maximum probabilities near 0.5 and identical per-tile detection counts, with flat, structureless probability overlays. The diagnosis proved instructive: the checkpoint had been saved by an earlier revision of the architecture whose layer names differed, and non-strict key matching silently matched \emph{zero} convolutional layers --- the network ran with random weights, producing sigmoids clustered at 0.5, exactly as observed. A second, independent mismatch compounded it: the tile loader re-implemented CLAHE with different parameters (OpenCV, clip limit 2.0) than the training pipeline (\texttt{skimage}, 0.03). Both defects are fixed in the shared codebase (explicit key remapping, loud mismatch reporting, preprocessing imported from the training package), and a re-run on a 300-tile sample reproduces the reference behaviour of Table~\ref{tab:south_pole_stats}. We report this as a textbook failure mode of multi-author deep-learning projects: non-strict checkpoint loading turns an interface mismatch into silently plausible-looking numbers, and only a cross-check against an independent run exposed it.
+Survey-scale inference required a decoupled pipeline (streaming tiles through the network, serialising each probability cube to compressed \texttt{.npz} storage, aggregating statistics in a second pass). An early run of it, however, contradicted Table~\ref{tab:south_pole_stats}: \emph{every} class appeared with average maximum probabilities near 0.5 and identical per-tile detection counts, with flat, structureless probability overlays (Fig.~\ref{fig:mega_grid_3x2}). The diagnosis proved instructive: the checkpoint had been saved by an earlier revision of the architecture whose layer names differed, and non-strict key matching silently matched \emph{zero} convolutional layers --- the network ran with random weights, producing sigmoids clustered at 0.5, exactly as observed. A second, independent mismatch compounded it: the tile loader re-implemented CLAHE with different parameters (OpenCV, clip limit 2.0) than the training pipeline (\texttt{skimage}, 0.03). Both defects are fixed in the shared codebase (explicit key remapping, loud mismatch reporting, preprocessing imported from the training package), and a re-run on a 300-tile sample reproduces the reference behaviour of Table~\ref{tab:south_pole_stats}. We report this as a textbook failure mode of multi-author deep-learning projects: non-strict checkpoint loading turns an interface mismatch into silently plausible-looking numbers, and only a cross-check against an independent run exposed it.
 
 \paragraph{Detection-level transfer.}
 The two detection formulations were deployed on the same tiles, and their disagreement is as instructive as their agreement. The YOLOv8 ensemble (Sect.~\ref{sec:yolo_ensemble}), at confidence $\geq0.5$, predicts a population that is overwhelmingly craters (98.0\% of detections), then wrinkle ridges (1.4\%) and lobate scarps (0.6\%) --- a plausible composition for heavily cratered highland terrain, consistent with the segmentation diagnostics. Mask R-CNN at its nominal threshold (0.5) instead returns only 52 instances in the entire region, \emph{all} ridges and \emph{zero} craters; craters emerge only as the threshold drops (188 detections at $\tau=0.2$, 8\,176 at 0.1, 104\,871 at 0.05). This is the domain-shift signature of a detector whose crater recall was already weak in-distribution (Sect.~\ref{sec:maskrcnn}): its crater confidence collapses below the nominal operating point on unfamiliar terrain. With no ground truth, no single composition can be validated --- but read together, the three formulations triangulate what a single pipeline cannot: segmentation and YOLOv8 agree on a crater-dominated region with rare linear tectonic features, while Mask R-CNN's threshold sweep shows which conclusions are hostage to confidence calibration under domain shift. In an unlabelled region, cross-method agreement is the only available currency of trust.
@@ -531,6 +531,397 @@ Taken together, the study argues that for planetary datasets with extreme preval
        Moon Features Recognition (Lecture 3b), Computational Physics, University of Padova
 
 \end{thebibliography}
+
+\begin{appendix}
+
+\section{Mask R-CNN: training history and qualitative results}
+\label{app:maskrcnn}
+
+Figure~\ref{fig:curves} shows the training history behind the checkpoint selection of Sect.~\ref{sec:maskrcnn}; Fig.~\ref{fig:qual} shows qualitative predictions on validation tiles.
+
+\begin{figure*}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figures/training_curves.png}
+\caption{Training history over $20$ epochs. \emph{Left:} train vs.\ validation
+loss --- validation loss turns upward after $\sim\!4$ epochs, indicating
+overfitting. \emph{Centre:} validation mAP@0.5, peaking near epoch~$8$.
+\emph{Right:} detection quality --- mask IoU saturates early and high, while
+precision and recall stay low. The decoupling of mask quality from detection
+quality is the central result of this experiment.}
+\label{fig:curves}
+\end{figure*}
+
+\begin{figure*}[p]
+\centering
+\includegraphics[height=0.92\textheight,keepaspectratio]{figures/prediction_samples.jpg}
+\caption{Qualitative results on ten validation tiles from the Marius Hills region.
+For each tile: original image (left), ground-truth instances (centre), and
+model predictions with class and confidence (right). The network localises and
+outlines the larger, higher-contrast craters and ridges reasonably well, but
+misses faint or small features and is unreliable on the rare pit/skylight and
+lobate-scarp classes.}
+\label{fig:qual}
+\end{figure*}
+
+\section{SmallUNet: architecture details, losses, and full ablation results}
+\label{app:unet}
+
+\subsection{Architecture}
+
+The spatial flow of the network with base width $w=32$ and $256\times 256$ input is:
+
+\[
+\begin{array}{c}
+(3,\,256,256)
+\xrightarrow{\text{inc}}   (32,\,256,256)\\[2pt]
+\xrightarrow{\text{down}_1}(64,\,128,128)\\[2pt]
+\xrightarrow{\text{down}_2}(128,\,64,64)\\[2pt]
+\xrightarrow{\text{down}_3}(256,\,32,32)\\[4pt]
+\xrightarrow{\text{up}_1}  (128,\,64,64)\\[2pt]
+\xrightarrow{\text{up}_2}  (64,\,128,128)\\[2pt]
+\xrightarrow{\text{up}_3}  (32,\,256,256)\\[2pt]
+\xrightarrow{\text{out}}   (7,\,256,256)
+\end{array}
+\]
+
+\noindent
+Doubling the base width $w$ quadruples the parameter count; Table~\ref{tab:bw_params} summarises the three widths explored in Study~2.
+
+\begin{table}[htbp]
+\centering
+\caption{Parameter counts for each base width.}
+\label{tab:bw_params}
+\begin{tabular}{lrr}
+\toprule
+Base width $w$ & Channel progression & Parameters \\
+\midrule
+16 & 16--32--64--128  &    505{,}095 \\
+32 & 32--64--128--256 & 2{,}014{,}727 \\
+64 & 64--128--256--512 & 8{,}047{,}623 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Loss definitions}
+
+\paragraph{BCEDiceLoss.}
+Binary cross-entropy summed with a soft Dice loss, averaged across classes:
+\[
+\mathcal{L}_{\text{BCEDice}} = \mathcal{L}_{\text{BCE}} + \mathcal{L}_{\text{Dice}},
+\]
+\[
+\mathcal{L}_{\text{Dice}} = 1 - \frac{1}{C}\sum_{c=1}^{C} \frac{2\sum_i p_i^c\, y_i^c + \varepsilon}{\sum_i p_i^c + \sum_i y_i^c + \varepsilon}
+\]
+where $p_i^c$ is the predicted probability and $y_i^c$ the ground-truth label for pixel $i$ and class $c$, and $\varepsilon=10^{-6}$ ensures numerical stability.
+
+\paragraph{FocalDiceLoss.}
+Replaces the BCE term with the binary focal loss~\citep{lin2017focal} to down-weight easy negatives and focus training on hard positives:
+\[
+\mathcal{L}_{\text{focal}}(p,y) = -\alpha\,y\,(1-p)^\gamma \log p
+                                   -(1-\alpha)(1-y)\,p^\gamma \log(1-p)
+\]
+with $\gamma=2$ and $\alpha=0.25$. The Dice term additionally uses per-class weights $\mathbf{w} = [1.0,\,4.0,\,5.0,\,5.0,\,5.0,\,5.0,\,5.0]$ to penalise misdetection of rare classes more heavily:
+\[
+\mathcal{L}_{\text{FocalDice}} = \mathcal{L}_{\text{focal}} + \sum_{c=1}^{C} w_c \,\mathcal{L}_{\text{Dice}}^c
+\]
+
+\subsection{Full ablation tables and validation curves}
+
+Tables~\ref{tab:arch_comparison}--\ref{tab:aug_comparison} report the complete per-study results summarised in Sect.~\ref{sec:mr_augmentation}; Figs.~\ref{fig:arch_metrics}--\ref{fig:aug_metrics} show the corresponding per-class validation curves.
+
+\begin{table}[htbp]
+\centering
+\caption{Architecture ablation on the full dataset (Tesla T4, 30 epochs). Metrics are macro-averaged across the seven classes; Ridge AP is the single-class AP of \texttt{wrinkle\_ridge}.}
+\label{tab:arch_comparison}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lrrrrrrr}
+\toprule
+Config & Params & Epoch (s) & Final loss & Mean F1 & Mean IoU & Mean AP & Ridge AP \\
+\midrule
+BCEDice    & 1{,}927{,}207 & 208 & 0.876 & 0.1998 & 0.1666 & 0.1989 & 0.440 \\
+FocalDice  & 1{,}927{,}207 & 214 & 3.893 & 0.1994 & 0.1632 & 0.1945 & 0.417 \\
++residual  & 2{,}014{,}727 & 257 & 3.873 & 0.2065 & 0.1675 & 0.1995 & 0.443 \\
++dropout   & 1{,}927{,}207 & 215 & 3.894 & 0.2018 & 0.1643 & 0.1938 & 0.405 \\
+\textbf{+both} & \textbf{2{,}014{,}727} & 258 & \textbf{3.863} & \textbf{0.2076} & \textbf{0.1688} & \textbf{0.2004} & \textbf{0.453} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Base-width sweep (FocalDice + residual + dropout=0.3, full T4 run, 30 epochs).}
+\label{tab:bw_comparison}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule
+Config & Params & Epoch (s) & Mean F1 & Mean IoU & Mean AP & Ridge AP \\
+\midrule
+small ($w=16$)   &    505{,}095 &  139 & 0.2031 & 0.1665 & 0.2003 & 0.451 \\
+default ($w=32$) & 2{,}014{,}727 &  258 & 0.2093 & 0.1704 & 0.2010 & 0.456 \\
+wide ($w=64$)    & 8{,}047{,}623 &  582 & \textbf{0.2153} & \textbf{0.1733} & \textbf{0.2016} & 0.445 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Augmentation study on the random tile split (FocalDice + residual + dropout=0.3, $w=32$, full T4 run, 30 epochs). Crater AP is given for reference; Ridge AP highlights the most affected rare class.}
+\label{tab:aug_comparison}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule
+Config & Final loss & Mean F1 & Mean IoU & Mean AP & Crater AP & Ridge AP \\
+\midrule
+\textbf{no augmentation} & \textbf{3.698} & \textbf{0.2986} & \textbf{0.2289} & \textbf{0.2647} & \textbf{0.947} & \textbf{0.558} \\
++augmentation            &        3.863  &        0.2124  &        0.1724  &        0.2027  &        0.942  &        0.457  \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{figure*}[htbp]
+\centering
+\begin{subfigure}[b]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{figures/MR/cloudveneto_arch_val_f1.png}
+    \caption{Validation F1}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{figures/MR/cloudveneto_arch_val_iou.png}
+    \caption{Validation IoU}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{figures/MR/cloudveneto_arch_val_ap.png}
+    \caption{Validation AP}
+\end{subfigure}
+\caption{Per-class validation metrics across training epochs for the five architecture configurations (full T4 run, 30 epochs). \textbf{+both} (residual + dropout + FocalDice) achieves the highest aggregate performance on all three metrics.}
+\label{fig:arch_metrics}
+\end{figure*}
+
+\begin{figure*}[htbp]
+\centering
+\begin{subfigure}[b]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{figures/MR/cloudveneto_bw_val_f1.png}
+    \caption{Validation F1}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{figures/MR/cloudveneto_bw_val_iou.png}
+    \caption{Validation IoU}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{figures/MR/cloudveneto_bw_val_ap.png}
+    \caption{Validation AP}
+\end{subfigure}
+\caption{Validation metrics for three network widths (full T4 run, 30 epochs). Wider networks achieve marginally higher scores but exhibit severely diminishing returns in parameters and training time.}
+\label{fig:bw_metrics}
+\end{figure*}
+
+\begin{figure*}[htbp]
+\centering
+\begin{subfigure}[b]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{figures/MR/cloudveneto_aug_val_f1.png}
+    \caption{Validation F1}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{figures/MR/cloudveneto_aug_val_iou.png}
+    \caption{Validation IoU}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{figures/MR/cloudveneto_aug_val_ap.png}
+    \caption{Validation AP}
+\end{subfigure}
+\caption{Validation metrics with and without geometric augmentation (random tile split, full T4 run, 30 epochs). No augmentation outperforms the augmented training on all metrics.}
+\label{fig:aug_metrics}
+\end{figure*}
+
+\subsection{Qualitative evaluation}
+
+\begin{figure}[htbp!]
+\centering
+\includegraphics[width=0.85\columnwidth,keepaspectratio]{figures/MR/qualitative_wrinkle_ridge.png}
+\caption{Wrinkle-ridge qualitative comparison on three validation tiles (TP green, FP red, FN blue). Both models recover the topology of the ridge network; the definitive model (+both, no augmentation) produces visibly more complete coverage and fewer false positives than the BCEDice baseline. Errors concentrate on thin, low-contrast ridge segments, consistent with the localisation difficulty of linear features.}
+\label{fig:qualitative_ridge}
+\end{figure}
+
+\begin{figure}[htbp!]
+\centering
+\includegraphics[width=0.85\columnwidth,keepaspectratio]{figures/MR/qualitative_impact_crater.png}
+\caption{Impact-crater qualitative comparison on the same tiles. The ground truth covers the \emph{entire} tile (cf.\ the 82\% prevalence and 50.7\% fully-covered tiles of Table~\ref{tab:prevalence}), so a prediction of ``everywhere'' is trivially correct: this figure is direct visual evidence that the crater channel behaves as a near-coverage layer and that crater AP must be read against its 0.821 chance baseline.}
+\label{fig:qualitative_crater}
+\end{figure}
+
+\section{YOLOv8: label statistics and training diagnostics}
+\label{app:yolo}
+
+Tables~\ref{tab:class_dist} and~\ref{tab:class_dist_reduced} report the box-level class distributions of the two training datasets of Sect.~\ref{sec:yolo}; Figs.~\ref{fig:class_dist}--\ref{fig:metrics_comparison} collect the label statistics and training diagnostics.
+
+\begin{table}[htbp]
+\centering
+\caption{Per-class instance distribution in the full lunar surface feature dataset.}
+\label{tab:class_dist}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llrr}
+\hline
+\textbf{Class ID} & \textbf{Class Label} & \textbf{Instances} & \textbf{Proportion (\%)} \\
+\hline
+class0 & Impact Crater         & 382,122 & 95.51 \\
+class2 & Wrinkle Ridge         &  16,133 &  4.03 \\
+class3 & Lobate Scarp          &     674 &  0.17 \\
+class1 & Pit Skylight          &     328 &  0.08 \\
+class4 & Irregular Mare Patch  &     191 &  0.05 \\
+class5 & Apollo Site           &     161 &  0.04 \\
+class6 & Candidate Rille       &      82 &  0.02 \\
+\hline
+\textbf{Total} & & \textbf{399,691} & \textbf{100.00} \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Per-class instance distribution of the reduced dataset after excluding the impact crater class.}
+\label{tab:class_dist_reduced}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llrr}
+\hline
+\textbf{Class ID} & \textbf{Class Label} & \textbf{Instances} & \textbf{Proportion (\%)} \\
+\hline
+class1 & Wrinkle Ridge        & 16,115 & 92.59 \\
+class2 & Lobate Scarp         &    664 &  3.81 \\
+class0 & Pit Skylight         &    311 &  1.79 \\
+class4 & Apollo Site          &    156 &  0.90 \\
+class3 & Irregular Mare Patch &    148 &  0.85 \\
+class5 & Candidate Rille      &     92 &  0.53 \\
+\hline
+\textbf{Total} & & \textbf{17,486} & \textbf{100.00} \\
+\hline
+\end{tabular}
+}
+\end{table}
+
+\begin{figure}[htbp!]
+    \centering
+    \includegraphics[width=0.85\linewidth]{./imageswithzero/labels_copy.jpg}
+    \caption{Class instance distribution of the full dataset across
+    seven categories. The impact crater class (class0) dominates with 382,122 instances,
+    representing 95.51\% of all annotations.}
+    \label{fig:class_dist}
+\end{figure}
+
+\begin{figure}[htbp!]
+    \centering
+    \includegraphics[width=0.95\linewidth]{./imageswithzero/loss.png}
+    \caption{Training and validation loss curves over 100 epochs for the YOLOv8n
+    model trained on the full seven-class dataset, including bounding box loss (box\_loss),
+    classification loss (cls\_loss), and distribution focal loss (dfl\_loss).}
+    \label{fig:loss_curves}
+\end{figure}
+
+\begin{figure}[htbp!]
+    \centering
+    \includegraphics[width=0.85\linewidth]{imageswithoutzero/labels(1).jpg}
+    \caption{Class instance distribution and spatial statistics of the reduced
+    dataset after removing the impact crater class. The spatial heatmap shows a
+    more uniform distribution of object centers across the image plane, while
+    bounding boxes remain concentrated at small width-height values ($<$0.2),
+    confirming the small-scale nature of the detected features.}
+    \label{fig:labels_reduced}
+\end{figure}
+
+\begin{figure}[htbp!]
+    \centering
+    \includegraphics[width=0.95\linewidth]{imageswithoutzero/results(1)copy.png}
+    \caption{Training and validation loss curves over 100 epochs for the YOLOv8n
+    model trained on the reduced dataset (impact crater class excluded), showing
+    box loss, classification loss, and distribution focal loss (DFL).}
+    \label{fig:loss_reduced}
+\end{figure}
+
+\begin{figure}[htbp!]
+    \centering
+    \includegraphics[width=\linewidth]{./image.png}
+    \caption{Recall curves over 100 training epochs for both
+    experiments. Right: full dataset --- recall grows slowly to $\sim$0.05,
+    reflecting the dominance of the impact crater class. Left: reduced
+    dataset --- recall grows steadily to $\sim$0.043, now spread across the
+    six rare classes rather than concentrated on craters.}
+    \label{fig:metrics_comparison}
+\end{figure}
+
+\section{South pole: inference diagnostics and the defective run}
+\label{app:southpole}
+
+Figure~\ref{fig:south_pole_diag} shows the per-class confidence diagnostics behind Table~\ref{tab:south_pole_stats}, and Fig.~\ref{fig:south_pole_best} the best-detected tile per class. Figure~\ref{fig:mega_grid_3x2} documents the defective pipeline run analysed in Sect.~\ref{sec:southpole}.
+
+\begin{figure*}[htbp]
+\centering
+\begin{subfigure}[b]{0.48\textwidth}
+    \includegraphics[width=\textwidth]{figures/MR/diagnostics_distributions.png}
+    \caption{Per-tile max-probability distributions.}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+    \includegraphics[width=\textwidth]{figures/MR/diagnostics_detection_rates.png}
+    \caption{Detection rate vs.\ confidence threshold.}
+\end{subfigure}
+\caption{South pole inference diagnostics across 3\,639 tiles. Impact craters are detected with near-certainty across the entire region. All other classes exhibit strongly right-skewed distributions with low average confidence, reflecting both the domain shift from Marius Hills and the scarcity of these features at the south pole.}
+\label{fig:south_pole_diag}
+\end{figure*}
+
+\begin{figure}[htbp!]
+\centering
+\includegraphics[width=0.85\columnwidth,keepaspectratio]{figures/MR/diagnostics_best_tiles.png}
+\caption{Best-detected tile per class on the south pole imagery. Each panel shows the LRO WAC tile overlaid with the predicted probability map for the class with the highest maximum confidence in that tile. Overlays use a \emph{relative} threshold (top fraction of each tile's probabilities), so coloured regions for the weak classes are candidate locations, not confident detections.}
+\label{fig:south_pole_best}
+\end{figure}
+
+\begin{figure*}[htbp]
+\centering
+  \begin{subfigure}[b]{0.4\textwidth}
+    \includegraphics[width=\textwidth]{output1.png}
+    \caption{Tile 1.}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.4\textwidth}
+    \includegraphics[width=\textwidth]{output2.png}
+    \caption{Tile 2.}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.4\textwidth}
+    \includegraphics[width=\textwidth]{output3.png}
+    \caption{Tile 3.}
+  \end{subfigure}
+
+  \vspace{0.5cm}
+  \begin{subfigure}[b]{0.4\textwidth}
+    \includegraphics[width=\textwidth]{output4.png}
+    \caption{Tile 4.}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.4\textwidth}
+    \includegraphics[width=\textwidth]{output5.png}
+    \caption{Tile 5.}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.4\textwidth}
+    \includegraphics[width=\textwidth]{output6.png}
+    \caption{Tile 6.}
+  \end{subfigure}
+
+\caption{Visual-verification outputs of the \emph{initial, defective} pipeline run on six south pole tiles (original imagery alongside per-class probability overlays). The overlays are flat and near-uniform regardless of the underlying morphology --- the visual signature of the silently unmatched checkpoint described in Sect.~\ref{sec:southpole}: a randomly initialised network outputs $\approx0.5$ everywhere, which post-processing renders as structureless fields. The corrected pipeline instead reproduces the class-selective behaviour of Table~\ref{tab:south_pole_stats}. The panels are retained precisely because they show how plausible a defective run can look at a glance.}
+\label{fig:mega_grid_3x2}
+\end{figure*}
+
+\end{appendix}
+
 
 
 

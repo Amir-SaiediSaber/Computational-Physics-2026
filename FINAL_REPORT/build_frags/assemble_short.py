@@ -59,6 +59,9 @@ entries.sort(key=bib_sort_key)
 parts.append("\\begin{thebibliography}{}")
 parts.append("\n\n".join(entries))
 parts.append("\\end{thebibliography}")
+# Appendices (supplementary figures, tables, and derivations; outside the
+# 10-page main body)
+parts.append(frag("frag_appendix.tex"))
 parts.append("")
 parts.append("\\end{document}")
 

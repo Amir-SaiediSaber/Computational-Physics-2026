@@ -15,7 +15,7 @@ Two composite losses are compared: \emph{BCEDice} (binary cross-entropy plus sof
 \subsection{Ablation campaign}
 \label{sec:mr_augmentation}
 
-Three controlled studies were run in sequence; Table~\ref{tab:final_summary} collects the best result of each.
+Three controlled studies were run in sequence; Table~\ref{tab:final_summary} collects the best result of each, and Appendix~\ref{app:unet} the architecture details, loss definitions, full per-study tables, validation curves, and qualitative comparisons.
 
 \paragraph{Study 1 --- architecture.}
 Five cumulative configurations (BCEDice; FocalDice; +residual; +dropout $p=0.3$; +both) were compared on the full T4 protocol. Residual shortcuts consistently improve aggregate F1, IoU, and AP; dropout alone does not help, likely because sparse labels already regularise the network; the combination \textbf{+both} is best (mean F1 0.2076, mean AP 0.2004, ridge AP 0.453). Crater AP is uniformly high (0.939--0.951) across all configurations, but against the 0.821 prevalence baseline of Table~\ref{tab:prevalence} this is only a modest lift over chance: architecture matters primarily for rare, structurally subtle classes such as ridges, where AP ${\sim}0.45$ is ${\sim}70\times$ the 0.0064 chance level.
