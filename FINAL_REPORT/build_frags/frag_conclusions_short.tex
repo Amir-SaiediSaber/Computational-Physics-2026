@@ -1,0 +1,24 @@
+\section{Discussion and conclusions}
+\label{sec:conclusions_global}
+
+Four formulations of lunar feature recognition --- classical image processing, semantic segmentation, instance segmentation, and single-stage detection --- were compared on the same data, the same spatially disjoint split, and the same metrics. The principal conclusions:
+
+\begin{enumerate}
+    \item \textbf{There is no single best architecture; the class regime decides.} On the sparse, genuinely supervised wrinkle-ridge class the pixel-supervised models dominate (SmallUNet MCC 0.452 $>$ Mask R-CNN 0.366 $\gg$ YOLOv8 0.076 $>$ classical $\approx$ chance): thin connected structures fit pixel supervision and fit bounding boxes poorly. On crater-sparse tiles the ranking flips and the detection formulations lead (Mask R-CNN 0.19, YOLOv8 0.16, SmallUNet $\approx0$). Matching the output representation to the geometry of the class matters more than architectural sophistication within a family.
+
+    \item \textbf{A saturated label channel cannot be won, only diagnosed.} The crater channel covers 82\% of pixels; a predict-everything baseline attains F1 $=0.90$, and the SmallUNet's seemingly excellent crater F1 reproduces exactly that baseline (MCC $\approx0$ in every regime). Prevalence-robust metrics are not a refinement here but a necessity.
+
+    \item \textbf{The evaluation protocol moves numbers more than the architecture does.} Retraining identical detectors under a random versus a spatial split (Sect.~\ref{sec:split_study}) quantifies the leakage induced by 50\%-overlapping tiles, and the augmentation study reached its conclusion only after being re-run leakage-free. Split geometry, metric choice, and threshold calibration must be fixed \emph{before} architectures are compared; several apparent contradictions between the single-method experiments of this project dissolved once their numbers were re-read under a common protocol.
+
+    \item \textbf{Cost and interpretability separate methods that accuracy does not.} Mask R-CNN's sparse-regime lead costs ${\sim}1.1$\,s per tile against 10--20\,ms for YOLOv8 and the SmallUNet and ${\sim}1$\,ms for the classical baseline --- at survey scale, the difference between minutes and hours per region. The classical baseline never wins on accuracy, but it defines the floor a learned method must beat and remains the only fully inspectable pipeline.
+
+    \item \textbf{Method-specific lessons survive the shared protocol.} For Mask R-CNN, mask quality and detection quality decouple (Dice 0.77 on matched objects against mAP@0.5 $\approx1\%$): the bottleneck is proposal recall on noisy instance targets. For the SmallUNet, geometric augmentation is harmful on directionally biased planetary terrain, an effect that persists under the leakage-free split. For YOLOv8, isolating the dominant class (95.5\% of instances) is the single most effective intervention, motivating the decoupled per-group ensemble.
+
+    \item \textbf{Unlabelled deployment needs independent cross-checks.} On the south pole, the segmentation diagnostics and YOLOv8 agree on the composition (craters dominant, linear tectonic features rare), while Mask R-CNN's threshold sweep --- zero craters at its nominal operating point, $10^5$ at $\tau=0.05$ --- shows that any single-pipeline composition is hostage to confidence calibration under domain shift. Together with the silently unmatched checkpoint incident, this underlines that agreement between independent pipelines, not single-pipeline confidence, is the currency of trust in unlabelled regions.
+\end{enumerate}
+
+Taken together, the study argues that for planetary datasets with extreme prevalence structure, the productive question is not ``which network is best'' but ``which output representation matches each feature class, under an evaluation protocol that cannot be gamed by the base rate'' --- and it provides a reusable such protocol, with all four methods reproducible from the shared repository.
+
+\begin{acknowledgements}
+      The Marius Hills and south pole tile datasets were prepared for the Laboratory of Computational Physics (mod.~B) course of the Physics of Data programme, University of Padova. Part of the training runs used GPU resources provided by the CloudVeneto infrastructure.
+\end{acknowledgements}

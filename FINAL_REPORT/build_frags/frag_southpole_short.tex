@@ -1,0 +1,34 @@
+\section{Application: mapping the lunar south pole}
+\label{sec:southpole}
+
+As a transfer test, the trained pipelines are deployed on the lunar south pole --- a region of high scientific and operational interest that is geologically distinct from the volcanic Marius Hills training domain. South-pole imagery from the same LRO WAC source is tiled identically, producing 3\,639 tiles. No feature catalogue exists for this region, so everything in this section is a transfer \emph{diagnostic}, not an accuracy measurement (Sect.~\ref{sec:metrics_protocol}).
+
+\paragraph{Semantic segmentation transfer.}
+Each tile is preprocessed with the training-time CLAHE + Sobel pipeline and passed through the definitive SmallUNet checkpoint; Table~\ref{tab:south_pole_stats} reports the aggregated confidence statistics. The model assigns high crater probability across the entire region (average per-tile maximum 0.863) --- expected behaviour given the near-saturated crater layer learned in training, and not to be over-interpreted as precise crater delineation (Sect.~\ref{sec:comp_crater}). Two classes, \texttt{wrinkle\_ridge} and \texttt{candidate\_rille}, show very low average probabilities but anomalously high global maxima (1.000 and 0.480): rare but confident predictions on a few tiles rather than diffuse activation. The weak performance on rare classes reflects the combination of domain shift and the near-absence of supervision for those classes even in the training region.
+
+\begin{table}[htbp]
+\centering
+\caption{SmallUNet south-pole inference (3\,639 tiles). Avg.\ Max.\ Prob.\ is the mean, over tiles, of the per-tile maximum predicted probability; Global Max the highest probability in any tile.}
+\label{tab:south_pole_stats}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lrrr}
+\toprule
+Class & Avg.\ Max.\ Prob. & Global Max & Status \\
+\midrule
+\texttt{impact\_crater}       & 0.863 & 1.000 & $\checkmark$ detected \\
+\texttt{lobate\_scarp}        & 0.060 & 0.303 & weak \\
+\texttt{pit\_skylight}        & 0.051 & 0.202 & weak \\
+\texttt{irregular\_mare\_patch} & 0.040 & 0.215 & weak \\
+\texttt{apollo\_site}         & 0.040 & 0.183 & weak \\
+\texttt{candidate\_rille}     & 0.006 & 0.480 & sparse \\
+\texttt{wrinkle\_ridge}       & 0.001 & 1.000 & sparse \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\paragraph{A reproducibility lesson.}
+Survey-scale inference required a decoupled pipeline (streaming tiles through the network, serialising each probability cube to compressed \texttt{.npz} storage, aggregating statistics in a second pass). An early run of it, however, contradicted Table~\ref{tab:south_pole_stats}: \emph{every} class appeared with average maximum probabilities near 0.5 and identical per-tile detection counts, with flat, structureless probability overlays. The diagnosis proved instructive: the checkpoint had been saved by an earlier revision of the architecture whose layer names differed, and non-strict key matching silently matched \emph{zero} convolutional layers --- the network ran with random weights, producing sigmoids clustered at 0.5, exactly as observed. A second, independent mismatch compounded it: the tile loader re-implemented CLAHE with different parameters (OpenCV, clip limit 2.0) than the training pipeline (\texttt{skimage}, 0.03). Both defects are fixed in the shared codebase (explicit key remapping, loud mismatch reporting, preprocessing imported from the training package), and a re-run on a 300-tile sample reproduces the reference behaviour of Table~\ref{tab:south_pole_stats}. We report this as a textbook failure mode of multi-author deep-learning projects: non-strict checkpoint loading turns an interface mismatch into silently plausible-looking numbers, and only a cross-check against an independent run exposed it.
+
+\paragraph{Detection-level transfer.}
+The two detection formulations were deployed on the same tiles, and their disagreement is as instructive as their agreement. The YOLOv8 ensemble (Sect.~\ref{sec:yolo_ensemble}), at confidence $\geq0.5$, predicts a population that is overwhelmingly craters (98.0\% of detections), then wrinkle ridges (1.4\%) and lobate scarps (0.6\%) --- a plausible composition for heavily cratered highland terrain, consistent with the segmentation diagnostics. Mask R-CNN at its nominal threshold (0.5) instead returns only 52 instances in the entire region, \emph{all} ridges and \emph{zero} craters; craters emerge only as the threshold drops (188 detections at $\tau=0.2$, 8\,176 at 0.1, 104\,871 at 0.05). This is the domain-shift signature of a detector whose crater recall was already weak in-distribution (Sect.~\ref{sec:maskrcnn}): its crater confidence collapses below the nominal operating point on unfamiliar terrain. With no ground truth, no single composition can be validated --- but read together, the three formulations triangulate what a single pipeline cannot: segmentation and YOLOv8 agree on a crater-dominated region with rare linear tectonic features, while Mask R-CNN's threshold sweep shows which conclusions are hostage to confidence calibration under domain shift. In an unlabelled region, cross-method agreement is the only available currency of trust.
