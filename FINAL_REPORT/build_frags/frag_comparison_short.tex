@@ -6,7 +6,7 @@ This section contains the central results of the paper: all four methods, reduce
 \subsection{Impact crater: the base-rate regime}
 \label{sec:comp_crater}
 
-On the full spatial validation set the crater channel covers 82\% of pixels, and a \emph{predict-everything} baseline attains F1 $=0.90$ and IoU $=0.82$ with MCC $=0$. Table~\ref{tab:crater_allval} shows that the SmallUNet essentially reproduces this baseline (F1 $=0.90$, MCC $=0.01$): its high F1 is not evidence of skill --- the network has learned to output the base rate, which on a channel where half the tiles contain no negative pixels is very hard to beat. Any comparison ranking methods by F1 or IoU here would be ranking base-rate reproduction; this is why MCC is the protocol's primary metric.
+On the full spatial validation set the crater channel covers 82\% of pixels, and a \emph{predict-everything} baseline attains F1 $=0.90$ and IoU $=0.82$ with MCC $=0$. Table~\ref{tab:crater_allval} shows that the SmallUNet essentially reproduces this baseline (F1 $=0.90$, MCC $=0.01$): its high F1 is not evidence of skill --- the network has learned to output the base rate, which on a channel where 50.7\% of tiles contain no negative pixels at all (Table~\ref{tab:prevalence}) is very hard to beat. Any comparison ranking methods by F1 or IoU here would be ranking base-rate reproduction; this is why MCC is the protocol's primary metric.
 
 \begin{table}[htbp]
 \centering

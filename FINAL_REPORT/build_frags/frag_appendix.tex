@@ -207,22 +207,6 @@ Config & Final loss & Mean F1 & Mean IoU & Mean AP & Crater AP & Ridge AP \\
 \label{fig:aug_metrics}
 \end{figure*}
 
-\subsection{Qualitative evaluation}
-
-\begin{figure}[htbp!]
-\centering
-\includegraphics[width=0.85\columnwidth,keepaspectratio]{figures/MR/qualitative_wrinkle_ridge.png}
-\caption{Wrinkle-ridge qualitative comparison on three validation tiles (TP green, FP red, FN blue). Both models recover the topology of the ridge network; the definitive model (+both, no augmentation) produces visibly more complete coverage and fewer false positives than the BCEDice baseline. Errors concentrate on thin, low-contrast ridge segments, consistent with the localisation difficulty of linear features.}
-\label{fig:qualitative_ridge}
-\end{figure}
-
-\begin{figure}[htbp!]
-\centering
-\includegraphics[width=0.85\columnwidth,keepaspectratio]{figures/MR/qualitative_impact_crater.png}
-\caption{Impact-crater qualitative comparison on the same tiles. The ground truth covers the \emph{entire} tile (cf.\ the 82\% prevalence and 50.7\% fully-covered tiles of Table~\ref{tab:prevalence}), so a prediction of ``everywhere'' is trivially correct: this figure is direct visual evidence that the crater channel behaves as a near-coverage layer and that crater AP must be read against its 0.821 chance baseline.}
-\label{fig:qualitative_crater}
-\end{figure}
-
 \section{YOLOv8: label statistics and training diagnostics}
 \label{app:yolo}
 
@@ -322,10 +306,10 @@ class5 & Candidate Rille      &     92 &  0.53 \\
     \label{fig:metrics_comparison}
 \end{figure}
 
-\section{South pole: inference diagnostics and the defective run}
+\section{South pole: inference diagnostics}
 \label{app:southpole}
 
-Figure~\ref{fig:south_pole_diag} shows the per-class confidence diagnostics behind Table~\ref{tab:south_pole_stats}, and Fig.~\ref{fig:south_pole_best} the best-detected tile per class. Figure~\ref{fig:mega_grid_3x2} documents the defective pipeline run analysed in Sect.~\ref{sec:southpole}.
+Figure~\ref{fig:south_pole_diag} shows the per-class confidence diagnostics behind Table~\ref{tab:south_pole_stats}.
 
 \begin{figure*}[htbp]
 \centering
@@ -340,50 +324,6 @@ Figure~\ref{fig:south_pole_diag} shows the per-class confidence diagnostics behi
 \end{subfigure}
 \caption{South pole inference diagnostics across 3\,639 tiles. Impact craters are detected with near-certainty across the entire region. All other classes exhibit strongly right-skewed distributions with low average confidence, reflecting both the domain shift from Marius Hills and the scarcity of these features at the south pole.}
 \label{fig:south_pole_diag}
-\end{figure*}
-
-\begin{figure}[htbp!]
-\centering
-\includegraphics[width=0.85\columnwidth,keepaspectratio]{figures/MR/diagnostics_best_tiles.png}
-\caption{Best-detected tile per class on the south pole imagery. Each panel shows the LRO WAC tile overlaid with the predicted probability map for the class with the highest maximum confidence in that tile. Overlays use a \emph{relative} threshold (top fraction of each tile's probabilities), so coloured regions for the weak classes are candidate locations, not confident detections.}
-\label{fig:south_pole_best}
-\end{figure}
-
-\begin{figure*}[htbp]
-\centering
-  \begin{subfigure}[b]{0.4\textwidth}
-    \includegraphics[width=\textwidth]{output1.png}
-    \caption{Tile 1.}
-  \end{subfigure}
-  \hfill
-  \begin{subfigure}[b]{0.4\textwidth}
-    \includegraphics[width=\textwidth]{output2.png}
-    \caption{Tile 2.}
-  \end{subfigure}
-  \hfill
-  \begin{subfigure}[b]{0.4\textwidth}
-    \includegraphics[width=\textwidth]{output3.png}
-    \caption{Tile 3.}
-  \end{subfigure}
-
-  \vspace{0.5cm}
-  \begin{subfigure}[b]{0.4\textwidth}
-    \includegraphics[width=\textwidth]{output4.png}
-    \caption{Tile 4.}
-  \end{subfigure}
-  \hfill
-  \begin{subfigure}[b]{0.4\textwidth}
-    \includegraphics[width=\textwidth]{output5.png}
-    \caption{Tile 5.}
-  \end{subfigure}
-  \hfill
-  \begin{subfigure}[b]{0.4\textwidth}
-    \includegraphics[width=\textwidth]{output6.png}
-    \caption{Tile 6.}
-  \end{subfigure}
-
-\caption{Visual-verification outputs of the \emph{initial, defective} pipeline run on six south pole tiles (original imagery alongside per-class probability overlays). The overlays are flat and near-uniform regardless of the underlying morphology --- the visual signature of the silently unmatched checkpoint described in Sect.~\ref{sec:southpole}: a randomly initialised network outputs $\approx0.5$ everywhere, which post-processing renders as structureless fields. The corrected pipeline instead reproduces the class-selective behaviour of Table~\ref{tab:south_pole_stats}. The panels are retained precisely because they show how plausible a defective run can look at a glance.}
-\label{fig:mega_grid_3x2}
 \end{figure*}
 
 \end{appendix}
